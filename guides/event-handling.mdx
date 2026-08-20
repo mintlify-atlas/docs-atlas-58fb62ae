@@ -1,7 +1,7 @@
 ---
-title: "Handling Tray Icon Mouse Events in Rust"
+title: "Handling Tray Icon Mouse Events with TrayIconEvent"
 sidebarTitle: "Event Handling"
-description: "Receive and process tray icon mouse events — click, double-click, enter, move, leave — using channels or custom event handlers."
+description: "Receive and process tray icon mouse events — click, double-click, enter, move, and leave — using channel receivers or custom event handlers."
 ---
 
 The `tray-icon` crate emits mouse interaction events through `TrayIconEvent`. These events cover clicks, double-clicks, and cursor movement in and out of the tray icon region. You can receive them via a built-in channel or install a custom handler closure — the latter being the recommended approach when integrating with `winit` or `tao`, because it wakes the event loop immediately on each event. Menu item clicks are handled separately through `MenuEvent`, covered in the [Menus guide](/guides/menus).

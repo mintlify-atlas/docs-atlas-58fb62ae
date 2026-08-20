@@ -1,7 +1,7 @@
 ---
-title: "TrayIconId — Unique Tray Icon Identifier"
+title: "TrayIconId — Unique Tray Icon Identifier Struct API"
 sidebarTitle: "TrayIconId"
-description: "Reference for TrayIconId, the unique identifier assigned to each tray icon instance, used to correlate TrayIconEvents with specific icons."
+description: "Reference for TrayIconId, a string newtype identifying each tray icon. Covers new, trait impls, and how IDs appear in events and TrayIconBuilder."
 ---
 
 `TrayIconId` is a newtype wrapping a `String` that uniquely identifies a tray icon instance. Every `TrayIconEvent` carries the `TrayIconId` of the icon that triggered it, so when your application manages more than one tray icon you can reliably route events to the correct handler. IDs can be supplied explicitly at construction time or generated automatically by the builder.
@@ -10,7 +10,7 @@ description: "Reference for TrayIconId, the unique identifier assigned to each t
 
 ### `TrayIconId::new`
 
-Creates a `TrayIconId` from any value that can be converted into a `String`.
+Creates a `TrayIconId` from any value that implements `AsRef<str>`.
 
 ```rust
 use tray_icon::TrayIconId;
@@ -19,26 +19,17 @@ let id = TrayIconId::new("my-tray");
 ```
 
 <ParamField path="id" type="S: AsRef<str>" required>
-  Any string-like value to use as the identifier. The value is stored verbatim
-  as the inner `String`.
+  Any string-like value to use as the identifier. The value is converted to a
+  `String` and stored as the inner field.
 </ParamField>
 
 ### `TrayIconId::new_unique`
 
-Generates a unique identifier derived from the current process ID and an
-internal monotonic counter. This is the method called internally by
-`TrayIconBuilder::new()` and `TrayIcon::new()` when no explicit ID is
-provided.
-
-```rust
-// Called automatically — shown here for illustration only.
-let id = TrayIconId::new_unique();
-// Produces a string such as "12345-1", "12345-2", etc.
-```
-
 <Note>
-  `new_unique` is `pub(crate)` in the source and is not intended to be called
-  directly. Use `TrayIconBuilder::with_id` to assign a deterministic ID, or
+  `new_unique` is `pub(crate)` in the source and is **not** part of the public
+  API. It is used internally by `TrayIconBuilder::new()` and `TrayIcon::new()`
+  to generate an ID derived from the current process ID and a monotonic
+  counter. Use `TrayIconBuilder::with_id` to assign a deterministic ID, or
   rely on the auto-generated one from `TrayIconBuilder::new()`.
 </Note>
 
@@ -53,6 +44,7 @@ let id = TrayIconId::new_unique();
 | `Hash` | Suitable for use as a key in `HashMap` / `HashSet`. |
 | `Eq` / `PartialEq` | Compares by string value. Also supports `PartialEq<&str>`, `PartialEq<String>`, and `PartialEq<&String>` for ergonomic comparisons. |
 | `PartialOrd` / `Ord` | Lexicographic ordering. |
+| `Default` | Produces a `TrayIconId` wrapping an empty string. |
 | `AsRef<str>` | Borrows the inner string slice. |
 | `From<T: ToString>` | Converts any `ToString` value into a `TrayIconId`. |
 | `FromStr` | Infallible parse from a `&str`. |
@@ -96,8 +88,9 @@ use tray_icon::{TrayIconBuilder, TrayIconEvent, TrayIconId, Icon};
 let id_a = TrayIconId::new("icon-a");
 let id_b = TrayIconId::new("icon-b");
 
-# let icon_a = Icon::from_rgba(vec![0u8; 4], 1, 1).unwrap();
-# let icon_b = Icon::from_rgba(vec![0u8; 4], 1, 1).unwrap();
+let icon_a = Icon::from_rgba(vec![0u8; 4], 1, 1).unwrap();
+let icon_b = Icon::from_rgba(vec![0u8; 4], 1, 1).unwrap();
+
 let _tray_a = TrayIconBuilder::new()
     .with_id(id_a.clone())
     .with_icon(icon_a)

@@ -46,8 +46,13 @@ description: "tray-icon is a Rust library for adding system tray icons with cont
 
 ## Quick Example
 
+The snippet below creates a tray icon with a context menu. `Icon` must be constructed before calling `build` — for example via `Icon::from_rgba` or by loading image bytes.
+
 ```rust
-use tray_icon::{TrayIconBuilder, menu::Menu};
+use tray_icon::{TrayIconBuilder, Icon, menu::Menu};
+
+// Icon can be loaded from RGBA bytes: Icon::from_rgba(rgba_data, width, height)
+let icon = Icon::from_rgba(vec![0u8; 32 * 32 * 4], 32, 32).unwrap();
 
 let tray_menu = Menu::new();
 
@@ -76,5 +81,5 @@ let tray_icon = TrayIconBuilder::new()
 </CardGroup>
 
 <Note>
-  On macOS, the tray icon **must** be created on the main thread after the event loop has started. On Linux, a GTK event loop must be running — typically on a dedicated thread when using non-GTK windowing libraries like winit.
+  On macOS, the tray icon **must** be created on the main thread and only after the event loop is already running — not merely created. On Linux and FreeBSD, a GTK event loop must be running on the **same thread** on which the tray icon is created, so when using a non-GTK windowing library (such as winit) you typically run the GTK loop on a separate thread and create the tray icon there.
 </Note>

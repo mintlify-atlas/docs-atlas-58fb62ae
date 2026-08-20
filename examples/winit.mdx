@@ -1,5 +1,5 @@
 ---
-title: "tray-icon with winit: Full Integration Example"
+title: "Integrating tray-icon with winit: Complete Example"
 sidebarTitle: "winit"
 description: "Complete example of integrating tray-icon with winit, including event forwarding via EventLoopProxy and Linux GTK thread spawning."
 ---
@@ -36,7 +36,7 @@ Add the following to your `Cargo.toml` to run this example:
 ```toml
 [dev-dependencies]
 winit = "0.30"
-image = { version = "0.25", features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 ```
 
 ## Full example

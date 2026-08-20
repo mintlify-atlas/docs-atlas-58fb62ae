@@ -1,5 +1,5 @@
 ---
-title: "tray-icon with tao: Full Integration Example"
+title: "Integrating tray-icon with tao Event Loop: Example"
 sidebarTitle: "tao"
 description: "Complete example of integrating tray-icon with tao (Tauri's windowing library), handling both tray and menu events in the event loop."
 ---
@@ -36,7 +36,7 @@ Add the following to your `Cargo.toml` to run this example:
 ```toml
 [dev-dependencies]
 tao = "0.36"
-image = { version = "0.25", features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 ```
 
 ## Full example

@@ -1,7 +1,7 @@
 ---
-title: "tray_icon::menu — Context Menu Re-exports"
-sidebarTitle: "menu"
-description: "tray_icon::menu is a full re-export of the muda crate, providing Menu, MenuItem, MenuEvent, PredefinedMenuItem, and ContextMenu for tray icon context menus."
+title: "tray_icon::menu — muda Context Menu Re-export API Ref"
+sidebarTitle: "Menu"
+description: "Documents Menu, MenuItem, PredefinedMenuItem, AboutMetadata, MenuEvent, and ContextMenu from the tray_icon::menu re-export of the muda crate."
 ---
 
 `tray_icon::menu` is declared as `pub use muda::*`, meaning it re-exports the entire [`muda`](https://docs.rs/muda) crate verbatim. You do not need to add `muda` as a direct dependency — everything is available through the `tray_icon::menu` path. This page documents the key types from that re-export that are used when building context menus for tray icons.
@@ -9,6 +9,14 @@ description: "tray_icon::menu is a full re-export of the muda crate, providing M
 ```rust
 use tray_icon::menu::{Menu, MenuItem, MenuEvent, PredefinedMenuItem, AboutMetadata};
 ```
+
+<Note>
+  This page documents only the types used directly in tray-icon examples.
+  `tray_icon::menu` re-exports the complete `muda` crate, which includes
+  additional menu types such as `Submenu`, `CheckMenuItem`, and
+  `IconMenuItem`. See the full API reference at
+  [docs.rs/muda](https://docs.rs/muda) for the complete type inventory.
+</Note>
 
 ## Menu
 
@@ -24,10 +32,6 @@ let tray_menu = Menu::new();
 `Menu::new()` returns an empty menu with no items.
 
 ### Adding Items
-
-<ParamField path="menu.append(item)" type="&dyn IsMenuItem -> Result<()>">
-  Appends a single menu item to the end of the menu.
-</ParamField>
 
 <ParamField path="menu.append_items(items)" type="&[&dyn IsMenuItem] -> Result<()>">
   Appends multiple items at once. This is the method used in the tray-icon
@@ -188,7 +192,7 @@ let meta = AboutMetadata {
     license: Some("MIT OR Apache-2.0".to_string()),
     website: Some("https://example.com".to_string()),
     website_label: Some("example.com".to_string()),
-    icon: None, // Option<Icon>
+    icon: None,
     ..Default::default()
 };
 ```
@@ -203,6 +207,12 @@ the panel or filled with OS defaults.
 `MenuEvent` is fired whenever a menu item is clicked. It mirrors the design of
 `TrayIconEvent`: you can consume events from a channel receiver or register a
 custom handler.
+
+### Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `MenuId` | The ID of the menu item that was activated. Compare with `MenuItem::id()` to identify the source item. |
 
 ### Channel Receiver
 
@@ -237,12 +247,6 @@ MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
   Pass `Some(closure)` to install a handler; pass `None` to clear it and
   resume delivery to the channel receiver.
 </ParamField>
-
-### `MenuEvent` Fields
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | `MenuId` | The ID of the menu item that was activated. Compare with `MenuItem::id()` to identify the source item. |
 
 ---
 
@@ -306,8 +310,8 @@ fn main() {
         &PredefinedMenuItem::about(
             None,
             Some(AboutMetadata {
-                name: Some("My App".to_string()),
-                copyright: Some("Copyright © 2024".to_string()),
+                name: Some("tao".to_string()),
+                copyright: Some("Copyright tao".to_string()),
                 ..Default::default()
             }),
         ),
@@ -327,7 +331,7 @@ fn main() {
                 tray_icon = Some(
                     TrayIconBuilder::new()
                         .with_menu(Box::new(tray_menu.clone()))
-                        .with_tooltip("My Application")
+                        .with_tooltip("tao - awesome windowing lib")
                         .with_icon(icon)
                         .build()
                         .unwrap(),
@@ -335,12 +339,14 @@ fn main() {
             }
 
             Event::UserEvent(UserEvent::TrayIconEvent(event)) => {
-                println!("Tray event: {:?}", event);
+                println!("{event:?}");
             }
 
             Event::UserEvent(UserEvent::MenuEvent(event)) => {
+                println!("{event:?}");
+
                 if event.id == quit_i.id() {
-                    tray_icon.take(); // Drop the icon to remove it.
+                    tray_icon.take();
                     *control_flow = ControlFlow::Exit;
                 }
             }
@@ -350,11 +356,3 @@ fn main() {
     });
 }
 ```
-
-<Note>
-  This page documents only the types used directly in tray-icon examples.
-  `tray_icon::menu` re-exports the complete `muda` crate, which includes
-  additional menu types such as `Submenu`, `CheckMenuItem`, and
-  `IconMenuItem`. See the full API reference at
-  [docs.rs/muda](https://docs.rs/muda) for the complete type inventory.
-</Note>

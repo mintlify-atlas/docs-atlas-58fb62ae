@@ -1,7 +1,7 @@
 ---
-title: "BadIcon — Icon Creation Error Variants"
+title: "BadIcon — tray-icon Icon Validation Error Variants"
 sidebarTitle: "BadIcon"
-description: "Reference for BadIcon, the error type returned when Icon creation fails due to invalid RGBA dimensions, byte count issues, or OS-level errors."
+description: "Reference for BadIcon, the error from Icon creation. Three variants: ByteCountNotDivisibleBy4, DimensionsVsPixelCount, and OsError(io::Error)."
 ---
 
 `BadIcon` is the error type returned by [`Icon::from_rgba`](/api/icon#from_rgba) (and the Windows-only constructors) when the supplied arguments cannot be used to create a valid icon. It implements both `std::error::Error` and `std::fmt::Display`, so it can be used with standard error-handling libraries like `anyhow` or `thiserror`. The `OsError` variant wraps an `io::Error` whose source can be retrieved via the standard `Error::source` method.

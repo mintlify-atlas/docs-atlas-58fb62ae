@@ -1,7 +1,7 @@
 ---
-title: "Installing Linux and FreeBSD System Dependencies"
+title: "Linux and FreeBSD System Dependencies for tray-icon"
 sidebarTitle: "Linux Dependencies"
-description: "Install the required GTK, libxdo, and libappindicator system packages for tray-icon on Arch Linux, Debian/Ubuntu, and FreeBSD."
+description: "Install the required GTK 3, libxdo, and libappindicator system packages for tray-icon on Arch Linux, Debian/Ubuntu, and FreeBSD before compiling."
 ---
 
 On Linux and FreeBSD, `tray-icon` relies on several native system libraries that must be installed before you can compile or run your application. Unlike Windows and macOS — where all required APIs ship with the OS — Linux requires GTK for the event loop, libappindicator (or its Ayatana fork) for the tray icon renderer, and optionally libxdo for predefined clipboard menu items. This page lists the packages to install for the most common distributions.

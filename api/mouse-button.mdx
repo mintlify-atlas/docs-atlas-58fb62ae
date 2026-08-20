@@ -1,7 +1,7 @@
 ---
-title: "MouseButton and MouseButtonState Enums"
+title: "MouseButton and MouseButtonState Enum API Reference"
 sidebarTitle: "MouseButton"
-description: "Reference for MouseButton (Left, Right, Middle) and MouseButtonState (Up, Down) enums used in TrayIconEvent click variants."
+description: "Reference for MouseButton (Left, Right, Middle) and MouseButtonState (Up, Down) enums used in TrayIconEvent click variants in the tray-icon crate."
 ---
 
 `MouseButton` and `MouseButtonState` are small enums that appear as fields in the [`TrayIconEvent::Click`](/api/tray-icon-event#click) variant. Together they describe which physical mouse button was involved in a click interaction and whether it was being pressed or released at the time the event fired. Both enums are `Copy`, so they can be passed by value freely without cloning.

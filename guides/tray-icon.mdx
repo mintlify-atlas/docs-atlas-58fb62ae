@@ -1,7 +1,7 @@
 ---
-title: "Creating and Managing Tray Icons with tray-icon"
+title: "Build, Configure, and Manage System Tray Icons in Rust"
 sidebarTitle: "Tray Icon"
-description: "Learn how to create, configure, and dynamically update system tray icons using TrayIcon and TrayIconBuilder in Rust."
+description: "Learn how to create, configure, and dynamically update system tray icons using TrayIconBuilder and TrayIcon in the tray-icon crate."
 ---
 
 The `tray-icon` crate provides a cross-platform API for embedding icons in the system tray (also called the notification area or status bar) of desktop applications. It supports Windows, macOS, and Linux (via GTK), and integrates naturally with event loops like [winit](https://docs.rs/winit) and [tao](https://docs.rs/tao). This guide walks through constructing a tray icon, updating it at runtime, and managing its lifecycle.
@@ -14,6 +14,7 @@ The `tray-icon` crate provides a cross-platform API for embedding icons in the s
 
 | Method | Description |
 |---|---|
+| `new()` | Create a new builder with an auto-generated `TrayIconId` and default attributes |
 | `with_id(id)` | Assign a custom [`TrayIconId`](#trayiconid) instead of the auto-generated one |
 | `with_icon(icon)` | Set the icon image (an [`Icon`](/guides/icons) value) |
 | `with_menu(menu)` | Attach a boxed context menu |
@@ -23,6 +24,8 @@ The `tray-icon` crate provides a cross-platform API for embedding icons in the s
 | `with_menu_on_left_click(bool)` | Show menu on left click (default `true`; Windows/macOS only) |
 | `with_menu_on_right_click(bool)` | Show menu on right click (default `true`; Windows/macOS only) |
 | `with_temp_dir_path(path)` | Override the temp directory for the icon file (Linux only) |
+| `id()` | Access the `TrayIconId` that will be assigned to the built icon |
+| `build()` | Finalize and register the tray icon with the system tray, returning `Result<TrayIcon>` |
 
 ### Complete builder example
 
@@ -124,6 +127,54 @@ Shows or hides the tray icon without destroying it.
 ```rust
 tray_icon.set_visible(true).unwrap();
 tray_icon.set_visible(false).unwrap();
+```
+
+### set_temp_dir_path
+
+Overrides the temporary directory used to write the icon file on Linux. Has no effect on Windows or macOS.
+
+```rust
+tray_icon.set_temp_dir_path(Some("/run/user/1000/myapp"));
+
+// Reset to the default ($XDG_RUNTIME_DIR/tray-icon or $TEMP/tray-icon)
+tray_icon.set_temp_dir_path::<&str>(None);
+```
+
+### set_icon_as_template
+
+Toggles macOS template-image rendering for the current icon. No-op on other platforms.
+
+```rust
+tray_icon.set_icon_as_template(true);  // macOS only
+tray_icon.set_icon_as_template(false); // revert to full-colour
+```
+
+### set_icon_with_as_template
+
+Atomically replaces the icon **and** the template flag in a single call. Useful on macOS to avoid a flash between separate `set_icon` and `set_icon_as_template` calls.
+
+```rust
+tray_icon.set_icon_with_as_template(Some(new_icon), true).unwrap();
+```
+
+This method is a no-op on Windows and Linux.
+
+### id
+
+Returns the `&TrayIconId` associated with this `TrayIcon` handle. All clones share the same id.
+
+```rust
+let id: &tray_icon::TrayIconId = tray_icon.id();
+```
+
+### rect
+
+Returns the `Rect` (position and size in physical pixels) of the tray icon in screen coordinates. Returns `None` on Linux.
+
+```rust
+if let Some(rect) = tray_icon.rect() {
+    println!("icon at {:?}, size {:?}", rect.position, rect.size);
+}
 ```
 
 ## Programmatic menu display

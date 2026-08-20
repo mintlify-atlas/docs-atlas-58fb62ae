@@ -1,5 +1,5 @@
 ---
-title: "TrayIcon — Runtime Tray Icon Management"
+title: "TrayIcon — Rust System Tray Icon Handle and Methods"
 sidebarTitle: "TrayIcon"
 description: "API reference for TrayIcon, the runtime handle for a system tray icon — update icon, tooltip, visibility, and listen for native handles."
 ---
@@ -82,10 +82,10 @@ Replaces the current tray icon image at runtime.
 ### `set_menu`
 
 ```rust
-pub fn set_menu(&self, menu: Option<Box<dyn ContextMenu>>)
+pub fn set_menu(&self, menu: Option<Box<dyn menu::ContextMenu>>)
 ```
 
-<ParamField path="menu" type="Option<Box<dyn ContextMenu>>" required>
+<ParamField path="menu" type="Option<Box<dyn menu::ContextMenu>>" required>
   The new context menu. Pass `None` to remove the menu (no-op on Linux).
 </ParamField>
 

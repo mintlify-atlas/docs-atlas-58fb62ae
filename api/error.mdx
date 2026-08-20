@@ -1,7 +1,7 @@
 ---
-title: "Error — tray-icon Error Types"
+title: "tray-icon Error Enum and Result Type Alias Reference"
 sidebarTitle: "Error"
-description: "Reference for the Error enum and Result type alias in tray-icon, covering OS errors, PNG encoding errors, and thread constraint violations."
+description: "Reference for the tray-icon Error enum and Result alias. Covers OsError, PngEncodingError (Linux/macOS only), NotMainThread, and non_exhaustive."
 ---
 
 The `tray_icon::Error` enum collects every failure mode that can arise when creating or modifying a tray icon. It is derived with [`thiserror`](https://docs.rs/thiserror), which means each variant provides a human-readable `Display` implementation and the enum itself implements `std::error::Error`. The companion `Result<T>` type alias makes return signatures concise throughout the crate.
@@ -35,7 +35,7 @@ future releases.
   PNG before being handed to the OS.
 
   ```rust
-  // Conditionally compiled — only present on macOS and Linux.
+  // Conditionally compiled — only present on macOS and Linux/BSD.
   #[cfg(any(target_os = "linux", target_os = "macos", /* BSDs */))]
   PngEncodingError(png::EncodingError)
   ```
@@ -52,7 +52,7 @@ future releases.
   this constraint is violated, `build()` returns `Err(Error::NotMainThread)`
   rather than panicking.
 
-  ```
+  ```text
   Display: "not on the main thread"
   ```
 </ParamField>

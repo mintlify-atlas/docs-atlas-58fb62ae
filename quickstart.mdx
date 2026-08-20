@@ -1,5 +1,5 @@
 ---
-title: "Get Started with tray-icon in 5 Minutes"
+title: "Quickstart: Build a Tray Icon App with tray-icon in Rust"
 sidebarTitle: "Quickstart"
 description: "Build a working system tray icon with a context menu and event handling in Rust using tray-icon — from Cargo.toml to a running app."
 ---
@@ -74,7 +74,7 @@ This guide walks you from an empty Rust project to a running application that sh
         ),
         &PredefinedMenuItem::separator(),
         &quit_item,
-    ]).unwrap();
+    ]);
 
     // Build the tray icon (call this only after the event loop has started)
     let tray_icon = TrayIconBuilder::new()
@@ -172,7 +172,7 @@ fn main() {
         ),
         &PredefinedMenuItem::separator(),
         &quit_i,
-    ]).unwrap();
+    ]);
 
     // The TrayIcon itself is created inside the event loop (StartCause::Init)
     let mut tray_icon = None;

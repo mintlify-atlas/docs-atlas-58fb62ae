@@ -1,5 +1,5 @@
 ---
-title: "TrayIconAttributes — Tray Icon Configuration"
+title: "TrayIconAttributes — System Tray Icon Configuration"
 sidebarTitle: "TrayIconAttributes"
 description: "Reference for TrayIconAttributes, the configuration struct used directly with TrayIcon::new() to set icon, menu, tooltip, title, and behavior."
 ---
@@ -13,7 +13,7 @@ description: "Reference for TrayIconAttributes, the configuration struct used di
 ```rust
 pub struct TrayIconAttributes {
     pub tooltip: Option<String>,
-    pub menu: Option<Box<dyn ContextMenu>>,
+    pub menu: Option<Box<dyn menu::ContextMenu>>,
     pub icon: Option<Icon>,
     pub temp_dir_path: Option<PathBuf>,
     pub icon_is_template: bool,
@@ -34,7 +34,7 @@ pub struct TrayIconAttributes {
   - **Linux:** Unsupported — the value is ignored at runtime.
 </ParamField>
 
-<ParamField path="menu" type="Option<Box<dyn ContextMenu>>" default="None">
+<ParamField path="menu" type="Option<Box<dyn menu::ContextMenu>>" default="None">
   A boxed context menu that opens when the user interacts with the icon
   (subject to `menu_on_left_click` / `menu_on_right_click` flags).
 

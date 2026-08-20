@@ -1,5 +1,5 @@
 ---
-title: "TrayIconBuilder — Build System Tray Icons"
+title: "TrayIconBuilder — System Tray Icon Builder for Rust"
 sidebarTitle: "TrayIconBuilder"
 description: "API reference for TrayIconBuilder, the builder struct for creating system tray icons with icon, tooltip, menu, and click behavior options."
 ---
@@ -35,7 +35,7 @@ Creates a new `TrayIconBuilder` with a freshly generated unique ID and default [
 ### `with_id`
 
 ```rust
-pub fn with_id<I: Into<TrayIconId>>(self, id: I) -> Self
+pub fn with_id<I: Into<TrayIconId>>(mut self, id: I) -> Self
 ```
 
 <ParamField path="id" type="I: Into<TrayIconId>" required>
@@ -50,7 +50,7 @@ Assigns an explicit ID instead of the auto-generated one. The value is converted
 ### `with_icon`
 
 ```rust
-pub fn with_icon(self, icon: Icon) -> Self
+pub fn with_icon(mut self, icon: Icon) -> Self
 ```
 
 <ParamField path="icon" type="Icon" required>
@@ -69,7 +69,7 @@ Sets the image displayed in the system tray. The `Icon` type can be constructed 
 ### `with_menu`
 
 ```rust
-pub fn with_menu(self, menu: Box<dyn ContextMenu>) -> Self
+pub fn with_menu(mut self, menu: Box<dyn menu::ContextMenu>) -> Self
 ```
 
 <ParamField path="menu" type="Box<dyn ContextMenu>" required>
@@ -89,7 +89,7 @@ Attaches a context menu to the tray icon.
 ### `with_tooltip`
 
 ```rust
-pub fn with_tooltip<S: AsRef<str>>(self, s: S) -> Self
+pub fn with_tooltip<S: AsRef<str>>(mut self, s: S) -> Self
 ```
 
 <ParamField path="s" type="S: AsRef<str>" required>
@@ -107,7 +107,7 @@ Sets the hover tooltip for the tray icon.
 ### `with_title`
 
 ```rust
-pub fn with_title<S: AsRef<str>>(self, title: S) -> Self
+pub fn with_title<S: AsRef<str>>(mut self, title: S) -> Self
 ```
 
 <ParamField path="title" type="S: AsRef<str>" required>
@@ -130,7 +130,7 @@ Sets a text title that appears alongside the icon. This is useful for displaying
 ### `with_temp_dir_path`
 
 ```rust
-pub fn with_temp_dir_path<P: AsRef<Path>>(self, s: P) -> Self
+pub fn with_temp_dir_path<P: AsRef<Path>>(mut self, s: P) -> Self
 ```
 
 <ParamField path="s" type="P: AsRef<Path>" required>
@@ -148,7 +148,7 @@ Overrides the directory used to store the temporary icon file. **Linux only.** B
 ### `with_icon_as_template`
 
 ```rust
-pub fn with_icon_as_template(self, is_template: bool) -> Self
+pub fn with_icon_as_template(mut self, is_template: bool) -> Self
 ```
 
 <ParamField path="is_template" type="bool" required>
@@ -166,7 +166,7 @@ Marks the icon as a [template image](https://developer.apple.com/documentation/a
 ### `with_menu_on_left_click`
 
 ```rust
-pub fn with_menu_on_left_click(self, enable: bool) -> Self
+pub fn with_menu_on_left_click(mut self, enable: bool) -> Self
 ```
 
 <ParamField path="enable" type="bool" required>
@@ -186,7 +186,7 @@ Controls whether the tray context menu is shown when the user left-clicks the ic
 ### `with_menu_on_right_click`
 
 ```rust
-pub fn with_menu_on_right_click(self, enable: bool) -> Self
+pub fn with_menu_on_right_click(mut self, enable: bool) -> Self
 ```
 
 <ParamField path="enable" type="bool" required>

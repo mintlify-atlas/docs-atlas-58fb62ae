@@ -1,7 +1,7 @@
 ---
-title: "Adding Context Menus to Tray Icons"
+title: "Adding and Managing Context Menus for System Tray Icons"
 sidebarTitle: "Menus"
-description: "Attach and manage context menus on tray icons using the muda crate, which is re-exported as tray_icon::menu."
+description: "Build and attach context menus to tray icons using the muda crate re-exported as tray_icon::menu, and handle menu item-click events."
 ---
 
 The `tray-icon` crate re-exports the [`muda`](https://crates.io/crates/muda) crate under `tray_icon::menu`, giving you a full-featured context menu library without an extra dependency declaration. You can build menus with items, separators, and predefined OS-level actions, attach them to a tray icon at creation time, and swap or update them at runtime. This guide covers the complete workflow from menu construction to handling item-click events.

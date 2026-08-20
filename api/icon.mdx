@@ -1,7 +1,7 @@
 ---
-title: "Icon — Platform Tray Icon Image Handle"
+title: "Icon — tray-icon Cross-Platform Tray Image Handle API"
 sidebarTitle: "Icon"
-description: "API reference for the Icon struct, which wraps a platform-specific icon image used for the system tray, with methods for creating icons from RGBA, files, and resources."
+description: "API reference for Icon in tray-icon. Covers from_rgba and Windows-only from_path, from_resource, from_resource_name, and from_handle constructors."
 ---
 
 `Icon` wraps a platform-specific image handle used to display an icon in the system tray. Every constructor validates the provided pixel data before the handle is created, returning a [`BadIcon`](/api/bad-icon) error if the dimensions or byte count are inconsistent. On Windows, additional constructors let you load icons directly from files, embedded resources, or raw `HICON` handles. On all other platforms, `Icon::from_rgba` is the primary way to produce an icon.
@@ -128,7 +128,7 @@ Like `from_resource`, but the embedded resource is identified by a string name r
 pub fn from_handle(handle: isize) -> Self
 ```
 
-Creates an `Icon` directly from an existing `HICON` handle (represented as `isize`). The caller is responsible for ensuring the handle is valid for the lifetime of the `Icon`.
+Creates an `Icon` directly from an existing `HICON` handle (represented as `isize`). The caller is responsible for ensuring the handle is valid for the lifetime of the `Icon`. Unlike the other constructors, this method is infallible and returns `Self` directly.
 
 <ParamField path="handle" type="isize" required>
   A valid Windows `HICON` handle cast to `isize`.

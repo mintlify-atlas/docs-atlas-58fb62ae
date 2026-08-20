@@ -1,7 +1,7 @@
 ---
-title: "Rect — Tray Icon Position and Size"
+title: "Rect — Physical Screen Bounding Rectangle for Tray Icons"
 sidebarTitle: "Rect"
-description: "Reference for the Rect struct, which describes the physical screen position and size of the tray icon region, included in all TrayIconEvent variants."
+description: "Reference for Rect, a plain struct bundling PhysicalSize and PhysicalPosition fields for the tray icon bounding rectangle included in every TrayIconEvent."
 ---
 
 `Rect` is a plain data struct that bundles the physical on-screen position and pixel dimensions of a tray icon. It is included as the `rect` field in every [`TrayIconEvent`](/api/tray-icon-event) variant, and can also be retrieved at any time via `TrayIcon::rect()`. All coordinates use physical pixels — no DPI scaling is applied — matching the convention used by `PhysicalPosition` and `PhysicalSize` throughout the `muda` / `dpi` crate family. The `dpi` module is re-exported from the [`muda`](https://docs.rs/muda) crate as `tray_icon::dpi`.

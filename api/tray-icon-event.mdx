@@ -1,7 +1,7 @@
 ---
-title: "TrayIconEvent — Mouse Events for Tray Icons"
+title: "TrayIconEvent — Tray Icon Mouse Interaction Events"
 sidebarTitle: "TrayIconEvent"
-description: "API reference for TrayIconEvent, the enum of mouse events emitted by a tray icon including click, double-click, enter, move, and leave variants."
+description: "API reference for TrayIconEvent: Click, DoubleClick, Enter, Move, and Leave variants. Covers receiver, set_event_handler, and serde tagging."
 ---
 
 `TrayIconEvent` is the enum that describes every mouse interaction dispatched by a tray icon. Events are either delivered through a shared channel (accessible via `TrayIconEvent::receiver`) or forwarded to a custom handler registered with `TrayIconEvent::set_event_handler`. The enum is marked `#[non_exhaustive]`, so pattern matches must include a catch-all arm to remain forwards-compatible as new variants are introduced. With the `serde` feature enabled, the enum serialises with a `"type"` tag and the `Click` variant uses `camelCase` field names.
@@ -63,6 +63,10 @@ A double-click occurred on the tray icon.
 | `position` | `PhysicalPosition<f64>` | Physical cursor position when the double-click occurred. |
 | `rect` | `Rect` | Bounding rectangle of the tray icon on screen. |
 | `button` | `MouseButton` | Which mouse button was double-clicked. |
+
+<Note>
+  `DoubleClick` does **not** have a `button_state` field. Only the `Click` variant carries `button_state`.
+</Note>
 
 ---
 
@@ -167,6 +171,16 @@ Registers a closure to be called for every new `TrayIconEvent`. Pass `Some(closu
 <ParamField path="f" type="Option<F>">
   `Some(closure)` installs the handler; `None` clears any existing handler and re-enables channel delivery.
 </ParamField>
+
+---
+
+## `TrayIconEventReceiver` type alias
+
+```rust
+pub type TrayIconEventReceiver = Receiver<TrayIconEvent>;
+```
+
+`TrayIconEventReceiver` is a type alias for `crossbeam_channel::Receiver<TrayIconEvent>`. It is returned by `TrayIconEvent::receiver()` and can be stored or passed to other threads for event polling.
 
 ---
 

@@ -1,7 +1,7 @@
 ---
-title: "Loading and Configuring Tray Icon Images"
+title: "Loading and Configuring Icons for Tray Applications"
 sidebarTitle: "Icons"
-description: "Load tray icon images from RGBA bytes, PNG files, or Windows resources, and configure template icons on macOS."
+description: "Load tray icon images from raw RGBA bytes, PNG files, or Windows resources, and configure macOS template icons for dark mode support."
 ---
 
 Tray icons are represented by the `Icon` type, which wraps a platform-specific image handle. Every `TrayIconBuilder` and runtime `set_icon` call accepts an `Icon` value. This guide explains the available constructors, platform-specific loading methods, and how to use template icons on macOS for automatic light/dark mode adaptation.
@@ -180,15 +180,18 @@ tray_icon.set_icon_with_as_template(Some(new_icon), true).unwrap();
   <Card title="ByteCountNotDivisibleBy4" icon="triangle-exclamation">
     The `rgba` byte slice length is not divisible by 4, so it cannot represent 32bpp RGBA pixels.
 
-    ```
+    ```rust
     byte_count: usize
     ```
   </Card>
   <Card title="DimensionsVsPixelCount" icon="ruler-combined">
     `width × height` does not equal `rgba.len() / 4`. At least one dimension or the byte slice is wrong.
 
-    ```
-    width, height, width_x_height, pixel_count: usize
+    ```rust
+    width: u32
+    height: u32
+    width_x_height: usize
+    pixel_count: usize
     ```
   </Card>
   <Card title="OsError" icon="circle-xmark">

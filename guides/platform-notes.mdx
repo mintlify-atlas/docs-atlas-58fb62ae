@@ -1,7 +1,7 @@
 ---
-title: "Platform-Specific Behavior and Constraints"
+title: "tray-icon Platform Notes: Windows, macOS, and Linux"
 sidebarTitle: "Platform Notes"
-description: "Understand how tray-icon behaves differently on Windows, macOS, and Linux, including event loop threading, feature gaps, and native API access."
+description: "Understand how tray-icon behaves differently on Windows, macOS, and Linux/FreeBSD, including event loop threading, feature gaps, and native API access."
 ---
 
 The `tray-icon` crate runs on Windows, macOS, and Linux/FreeBSD, but each platform has distinct requirements around event loop threading, icon creation timing, native handle access, and supported features. Reading these notes before wiring up your integration will save you from subtle race conditions, invisible icons, and missing events.
@@ -175,7 +175,13 @@ The `tray-icon` crate runs on Windows, macOS, and Linux/FreeBSD, but each platfo
     not run a GTK loop), you must spawn a dedicated thread:
 
     ```rust
-    #[cfg(target_os = "linux")]
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
     std::thread::spawn(|| {
         gtk::init().unwrap();
         let _tray_icon = TrayIconBuilder::new()

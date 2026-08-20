@@ -1,7 +1,7 @@
 ---
 title: "tray-icon with egui/eframe: Full Integration Example"
 sidebarTitle: "egui"
-description: "Complete example of adding a system tray icon to an egui/eframe application, with Linux GTK thread handling for the tray icon."
+description: "Complete example of adding a system tray icon to an egui/eframe application, with Linux GTK thread handling and cross-platform Rc<RefCell> ownership."
 ---
 
 `egui` is an immediate-mode GUI library for Rust, and `eframe` is its native application framework. Under the hood, eframe uses winit for window management — which means Linux requires the same GTK-thread workaround as the winit integration. On Windows and macOS, where eframe's internal winit loop and GTK are not in conflict, the tray icon can be created directly inside the `eframe::run_native` closure using `Rc<RefCell<Option<TrayIcon>>>` to bridge the ownership boundary.
@@ -40,7 +40,7 @@ Add the following to your `Cargo.toml` to run this example:
 ```toml
 [dev-dependencies]
 eframe = "0.31"
-image = { version = "0.25", features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
 ```
 
 ## Full example
