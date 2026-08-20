@@ -1,0 +1,223 @@
+---
+title: "Creating and Managing Tray Icons with tray-icon"
+sidebarTitle: "Tray Icon"
+description: "Learn how to create, configure, and dynamically update system tray icons using TrayIcon and TrayIconBuilder in Rust."
+---
+
+The `tray-icon` crate provides a cross-platform API for embedding icons in the system tray (also called the notification area or status bar) of desktop applications. It supports Windows, macOS, and Linux (via GTK), and integrates naturally with event loops like [winit](https://docs.rs/winit) and [tao](https://docs.rs/tao). This guide walks through constructing a tray icon, updating it at runtime, and managing its lifecycle.
+
+## TrayIconBuilder
+
+`TrayIconBuilder` is the primary way to construct a `TrayIcon`. It uses a method-chaining builder pattern where each configuration method returns `Self`, allowing all options to be set in a single expression before calling `.build()` to register the icon with the system tray.
+
+### Builder methods
+
+| Method | Description |
+|---|---|
+| `with_id(id)` | Assign a custom [`TrayIconId`](#trayiconid) instead of the auto-generated one |
+| `with_icon(icon)` | Set the icon image (an [`Icon`](/guides/icons) value) |
+| `with_menu(menu)` | Attach a boxed context menu |
+| `with_tooltip(s)` | Set the hover tooltip text (unsupported on Linux) |
+| `with_title(s)` | Set a text title shown beside the icon (Linux/macOS only) |
+| `with_icon_as_template(bool)` | Mark icon as a macOS template image |
+| `with_menu_on_left_click(bool)` | Show menu on left click (default `true`; Windows/macOS only) |
+| `with_menu_on_right_click(bool)` | Show menu on right click (default `true`; Windows/macOS only) |
+| `with_temp_dir_path(path)` | Override the temp directory for the icon file (Linux only) |
+
+### Complete builder example
+
+```rust
+use tray_icon::{TrayIconBuilder, Icon};
+use tray_icon::menu::Menu;
+
+let tray_menu = Menu::new();
+// populate the menu …
+
+let icon = load_icon(); // returns an Icon built from RGBA data
+
+let tray_icon = TrayIconBuilder::new()
+    .with_id("main-tray")
+    .with_icon(icon)
+    .with_menu(Box::new(tray_menu))
+    .with_tooltip("My Application")
+    .with_icon_as_template(true)   // macOS only
+    .with_menu_on_left_click(false) // don't show menu on left click
+    .build()
+    .unwrap();
+```
+
+<Warning>
+On macOS the tray icon **must** be created on the main thread, and the event loop must already be running — not merely created. In winit, the earliest safe point is the [`StartCause::Init`](https://docs.rs/winit/latest/winit/event/enum.StartCause.html#variant.Init) event. Creating the icon too early can cause issues with fullscreen applications.
+</Warning>
+
+## TrayIcon struct
+
+`TrayIcon` is reference-counted (`Rc`-backed) and implements `Clone`. Every clone shares the same underlying platform icon handle — the icon is removed from the system tray only when the **last** instance is dropped.
+
+```rust
+let tray_icon = TrayIconBuilder::new()
+    .with_tooltip("demo")
+    .build()
+    .unwrap();
+
+// Cloning shares ownership — the tray icon remains visible
+// as long as at least one TrayIcon value is alive.
+let _another_handle = tray_icon.clone();
+
+// The icon disappears when both `tray_icon` and `_another_handle` go out of scope.
+```
+
+## Runtime updates
+
+After creation, every attribute can be updated through methods on the `TrayIcon` value. None of these require rebuilding the icon from scratch.
+
+### set_icon
+
+Replaces the current icon image. Pass `None` to remove the icon entirely.
+
+```rust
+let new_icon = load_icon_from_rgba(new_rgba, width, height);
+tray_icon.set_icon(Some(new_icon)).unwrap();
+
+// Remove the visible icon without destroying the TrayIcon
+tray_icon.set_icon(None).unwrap();
+```
+
+### set_menu
+
+Swaps the attached context menu at runtime.
+
+```rust
+use tray_icon::menu::Menu;
+
+let new_menu = Menu::new();
+// … populate new_menu …
+tray_icon.set_menu(Some(Box::new(new_menu)));
+```
+
+<Note>
+On Linux, once a menu has been set it **cannot** be removed — passing `None` has no effect. You can still update the menu's contents.
+</Note>
+
+### set_tooltip
+
+Updates the hover tooltip. Pass `None` to clear it. Unsupported on Linux.
+
+```rust
+tray_icon.set_tooltip(Some("Connected")).unwrap();
+tray_icon.set_tooltip::<&str>(None).unwrap(); // clear
+```
+
+### set_title
+
+Sets the text label displayed next to the icon. Supported on Linux and macOS; unsupported on Windows.
+
+```rust
+tray_icon.set_title(Some("3 notifications"));
+tray_icon.set_title::<&str>(None); // clear
+```
+
+### set_visible
+
+Shows or hides the tray icon without destroying it.
+
+```rust
+tray_icon.set_visible(true).unwrap();
+tray_icon.set_visible(false).unwrap();
+```
+
+## Programmatic menu display
+
+`show_menu()` opens the context menu at the current cursor position without waiting for a mouse click. This is useful for triggering the menu from a keyboard shortcut or another UI action. Supported on Windows and macOS only.
+
+```rust
+// Programmatically open the tray menu
+tray_icon.show_menu();
+```
+
+## Menu-on-click configuration
+
+By default the context menu opens on both left and right clicks. You can toggle each independently at runtime:
+
+```rust
+// Don't open the menu on a left click (e.g. you handle that click yourself)
+tray_icon.set_show_menu_on_left_click(false);
+
+// Re-enable right-click menu
+tray_icon.set_show_menu_on_right_click(true);
+```
+
+Both methods are no-ops on Linux.
+
+## TrayIconId
+
+`TrayIconId` is a newtype wrapper around `String` that uniquely identifies a tray icon. It is used to match events back to the icon that generated them.
+
+<Tabs>
+  <Tab title="Auto-generated ID">
+    When you call `TrayIconBuilder::new()` without `.with_id(...)`, an ID is generated automatically from the process ID and an internal counter.
+
+    ```rust
+    let builder = TrayIconBuilder::new();
+    println!("id: {}", builder.id().0); // e.g. "12345-1"
+    ```
+  </Tab>
+  <Tab title="Custom ID">
+    Assign a human-readable string id with `with_id`. Any type that implements `Into<TrayIconId>` — including `&str` and `String` — is accepted.
+
+    ```rust
+    use tray_icon::TrayIconId;
+
+    let tray_icon = TrayIconBuilder::new()
+        .with_id("main-tray")
+        .build()
+        .unwrap();
+
+    // Retrieve the id later
+    let id: &TrayIconId = tray_icon.id();
+    assert_eq!(id, "main-tray");
+    ```
+  </Tab>
+</Tabs>
+
+You can also construct a `TrayIconId` directly:
+
+```rust
+use tray_icon::TrayIconId;
+
+let id = TrayIconId::new("my-app-tray");
+```
+
+## Platform-specific native handles
+
+When you need direct access to the underlying platform object — for embedding, styling, or interop — `TrayIcon` exposes conditional accessor methods.
+
+<CardGroup cols={3}>
+  <Card title="Windows" icon="windows">
+    `window_handle()` returns the `HWND` for the hidden tray window. Valid for the lifetime of the `TrayIcon`.
+
+    ```rust
+    #[cfg(windows)]
+    let hwnd: windows_sys::Win32::Foundation::HWND =
+        tray_icon.window_handle();
+    ```
+  </Card>
+  <Card title="macOS" icon="apple">
+    `ns_status_item()` returns an `Option<Retained<NSStatusItem>>` from `objc2_app_kit`.
+
+    ```rust
+    #[cfg(target_os = "macos")]
+    if let Some(item) = tray_icon.ns_status_item() {
+        // interact with NSStatusItem
+    }
+    ```
+  </Card>
+  <Card title="Linux" icon="linux">
+    `app_indicator()` returns a raw pointer to the `libappindicator::AppIndicator`. The pointer is valid as long as the `TrayIcon` lives.
+
+    ```rust
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let ptr = unsafe { tray_icon.app_indicator() };
+    ```
+  </Card>
+</CardGroup>

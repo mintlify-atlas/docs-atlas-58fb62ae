@@ -1,0 +1,101 @@
+---
+title: "Installing tray-icon in Your Rust Project"
+sidebarTitle: "Installation"
+description: "Add tray-icon to Cargo.toml, enable optional features, and install required system libraries on Linux and FreeBSD."
+---
+
+Adding `tray-icon` to a Rust project takes a single `Cargo.toml` entry on Windows and macOS. On Linux and FreeBSD you also need a handful of system libraries for GTK and the app indicator backend — this page walks through everything you need to get a clean build on every platform.
+
+## Add to Cargo.toml
+
+Add `tray-icon` to the `[dependencies]` section of your `Cargo.toml`:
+
+```toml
+[dependencies]
+tray-icon = "0.24.2"
+```
+
+The crate will automatically pull in `muda` (re-exported as `tray_icon::menu`) and all required platform dependencies.
+
+If you need to load icon images from PNG files, add the `image` crate as well:
+
+```toml
+[dependencies]
+tray-icon = "0.24.2"
+image = { version = "0.25", default-features = false, features = ["png"] }
+```
+
+## Cargo Features
+
+`tray-icon` exposes several optional features you can enable depending on your target platform and requirements:
+
+| Feature | Default | Description |
+|---|---|---|
+| `gtk` | ✅ Yes | Enables GTK support required for the tray icon on Linux and FreeBSD. Links against `libappindicator` or `libayatana-appindicator`. |
+| `libxdo` | ✅ Yes | Links against `libxdo` to enable the predefined `Copy`, `Cut`, `Paste`, and `SelectAll` menu items on Linux. |
+| `common-controls-v6` | ❌ No | Uses `TaskDialogIndirect` from `ComCtl32.dll` v6 on Windows to display the predefined `About` menu item dialog. |
+| `serde` | ❌ No | Derives `Serialize` and `Deserialize` on all public event and state types via the `serde` crate. |
+
+To enable optional features, list them in your `Cargo.toml`:
+
+```toml
+[dependencies]
+tray-icon = { version = "0.24.2", features = ["serde", "common-controls-v6"] }
+```
+
+To disable the default features (for example, on a non-Linux platform where you want a leaner build):
+
+```toml
+[dependencies]
+tray-icon = { version = "0.24.2", default-features = false }
+```
+
+<Note>
+  The `gtk` feature is enabled by default because it is required for the tray icon to appear on Linux and FreeBSD. If you are targeting Windows or macOS exclusively and want to reduce compile time, you can disable it with `default-features = false`.
+</Note>
+
+## Linux System Dependencies
+
+On Linux, `tray-icon` requires GTK 3, `libxdo`, and either `libappindicator` or `libayatana-appindicator` to be installed on the build host. Install them using your distribution's package manager:
+
+<Tabs>
+  <Tab title="Arch Linux / Manjaro">
+    ```sh
+    pacman -S gtk3 xdotool libappindicator-gtk3
+    ```
+
+    Or, if your desktop environment uses the Ayatana fork:
+
+    ```sh
+    pacman -S gtk3 xdotool libayatana-appindicator
+    ```
+  </Tab>
+  <Tab title="Debian / Ubuntu">
+    ```sh
+    sudo apt install libgtk-3-dev libxdo-dev libappindicator3-dev
+    ```
+
+    Or, if your desktop environment uses the Ayatana fork:
+
+    ```sh
+    sudo apt install libgtk-3-dev libxdo-dev libayatana-appindicator3-dev
+    ```
+  </Tab>
+</Tabs>
+
+## FreeBSD System Dependencies
+
+On FreeBSD, install the required build dependencies using `pkg`:
+
+```sh
+pkg install -y rust glib pkgconf gtk3
+```
+
+## Minimum Supported Rust Version
+
+`tray-icon` requires **Rust 1.73** or later. Make sure your toolchain is up to date:
+
+```sh
+rustup update stable
+rustc --version
+```

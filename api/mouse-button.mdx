@@ -1,0 +1,96 @@
+---
+title: "MouseButton and MouseButtonState Enums"
+sidebarTitle: "MouseButton"
+description: "Reference for MouseButton (Left, Right, Middle) and MouseButtonState (Up, Down) enums used in TrayIconEvent click variants."
+---
+
+`MouseButton` and `MouseButtonState` are small enums that appear as fields in the [`TrayIconEvent::Click`](/api/tray-icon-event#click) variant. Together they describe which physical mouse button was involved in a click interaction and whether it was being pressed or released at the time the event fired. Both enums are `Copy`, so they can be passed by value freely without cloning.
+
+---
+
+## `MouseButton`
+
+```rust
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum MouseButton {
+    #[default]
+    Left,
+    Right,
+    Middle,
+}
+```
+
+Identifies which physical mouse button produced the event.
+
+| Variant | Description |
+|---|---|
+| `Left` *(default)* | The primary (left) mouse button. This is the most common button for activating a tray icon or showing its menu. |
+| `Right` | The secondary (right) mouse button. Conventionally used to open a context menu. |
+| `Middle` | The middle (scroll-wheel) button. Less common but may appear on systems that report middle-click events for tray icons. |
+
+### Trait implementations
+
+| Trait | Notes |
+|---|---|
+| `Clone` / `Copy` | Can be freely copied without heap allocation. |
+| `PartialEq` / `Eq` | Supports equality comparisons and use in `match`. |
+| `Debug` | Formatted as `"Left"`, `"Right"`, or `"Middle"`. |
+| `Default` | `Left` is the default variant. |
+| `Serialize` / `Deserialize` | Available with the **`serde`** feature. Serialises as the variant name string, e.g. `"Left"`. |
+
+---
+
+## `MouseButtonState`
+
+```rust
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum MouseButtonState {
+    #[default]
+    Up,
+    Down,
+}
+```
+
+Describes whether the mouse button was in a pressed or released state when the `Click` event was emitted.
+
+| Variant | Description |
+|---|---|
+| `Up` *(default)* | The button was released. Most "click" actions are performed on button release. |
+| `Down` | The button was pressed. Appears at the start of a click gesture before the button is released. |
+
+### Trait implementations
+
+| Trait | Notes |
+|---|---|
+| `Clone` / `Copy` | Can be freely copied without heap allocation. |
+| `PartialEq` / `Eq` | Supports equality comparisons and use in `match`. |
+| `Debug` | Formatted as `"Up"` or `"Down"`. |
+| `Default` | `Up` is the default variant. |
+| `Serialize` / `Deserialize` | Available with the **`serde`** feature. Serialises as the variant name string, e.g. `"Down"`. |
+
+---
+
+## Example: pattern matching on click events
+
+```rust
+use tray_icon::{TrayIconEvent, MouseButton, MouseButtonState};
+
+if let Ok(event) = TrayIconEvent::receiver().try_recv() {
+    if let TrayIconEvent::Click { button, button_state, position, .. } = event {
+        match (button, button_state) {
+            (MouseButton::Left, MouseButtonState::Up) => {
+                // Primary action: show the application window.
+                println!("Left-click released at {position:?}");
+            }
+            (MouseButton::Right, MouseButtonState::Up) => {
+                // Secondary action: show a context menu.
+                println!("Right-click released at {position:?}");
+            }
+            (MouseButton::Left, MouseButtonState::Down) => {
+                // Button is held down — update visual state if needed.
+            }
+            _ => {}
+        }
+    }
+}
+```

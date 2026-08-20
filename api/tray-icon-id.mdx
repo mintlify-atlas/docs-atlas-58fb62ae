@@ -1,0 +1,128 @@
+---
+title: "TrayIconId — Unique Tray Icon Identifier"
+sidebarTitle: "TrayIconId"
+description: "Reference for TrayIconId, the unique identifier assigned to each tray icon instance, used to correlate TrayIconEvents with specific icons."
+---
+
+`TrayIconId` is a newtype wrapping a `String` that uniquely identifies a tray icon instance. Every `TrayIconEvent` carries the `TrayIconId` of the icon that triggered it, so when your application manages more than one tray icon you can reliably route events to the correct handler. IDs can be supplied explicitly at construction time or generated automatically by the builder.
+
+## Construction
+
+### `TrayIconId::new`
+
+Creates a `TrayIconId` from any value that can be converted into a `String`.
+
+```rust
+use tray_icon::TrayIconId;
+
+let id = TrayIconId::new("my-tray");
+```
+
+<ParamField path="id" type="S: AsRef<str>" required>
+  Any string-like value to use as the identifier. The value is stored verbatim
+  as the inner `String`.
+</ParamField>
+
+### `TrayIconId::new_unique`
+
+Generates a unique identifier derived from the current process ID and an
+internal monotonic counter. This is the method called internally by
+`TrayIconBuilder::new()` and `TrayIcon::new()` when no explicit ID is
+provided.
+
+```rust
+// Called automatically — shown here for illustration only.
+let id = TrayIconId::new_unique();
+// Produces a string such as "12345-1", "12345-2", etc.
+```
+
+<Note>
+  `new_unique` is `pub(crate)` in the source and is not intended to be called
+  directly. Use `TrayIconBuilder::with_id` to assign a deterministic ID, or
+  rely on the auto-generated one from `TrayIconBuilder::new()`.
+</Note>
+
+## Trait Implementations
+
+`TrayIconId` implements the following standard traits:
+
+| Trait | Notes |
+|---|---|
+| `Clone` | Cheaply clones the inner `String`. |
+| `Debug` | Formats as the raw string value. |
+| `Hash` | Suitable for use as a key in `HashMap` / `HashSet`. |
+| `Eq` / `PartialEq` | Compares by string value. Also supports `PartialEq<&str>`, `PartialEq<String>`, and `PartialEq<&String>` for ergonomic comparisons. |
+| `PartialOrd` / `Ord` | Lexicographic ordering. |
+| `AsRef<str>` | Borrows the inner string slice. |
+| `From<T: ToString>` | Converts any `ToString` value into a `TrayIconId`. |
+| `FromStr` | Infallible parse from a `&str`. |
+
+With the `serde` feature enabled, `TrayIconId` also implements `serde::Serialize` and `serde::Deserialize`, so it round-trips cleanly through JSON and other formats.
+
+## Where TrayIconId Appears
+
+- **`TrayIconEvent` variants** — every variant (`Click`, `DoubleClick`, `Enter`, `Move`, `Leave`) has an `id: TrayIconId` field identifying which icon fired the event.
+- **`TrayIconEvent::id()`** — a convenience method that extracts the ID from any variant without pattern-matching.
+- **`TrayIcon::id()`** — returns a reference to the ID associated with a live tray icon instance.
+- **`TrayIconBuilder::id()`** — returns a reference to the ID the builder will assign when `build()` is called.
+
+## Assigning an ID via the Builder
+
+```rust
+use tray_icon::{TrayIconBuilder, TrayIconId};
+
+let id = TrayIconId::new("main-tray");
+
+let tray = TrayIconBuilder::new()
+    .with_id(id.clone())
+    .with_tooltip("My Application")
+    .build()
+    .unwrap();
+
+// The live icon's ID matches what was set.
+assert_eq!(tray.id(), &id);
+```
+
+## Routing Events from Multiple Tray Icons
+
+A common pattern is to create two tray icons with distinct IDs and use the
+`id` field in each `TrayIconEvent` to decide which icon the user interacted
+with.
+
+```rust
+use tray_icon::{TrayIconBuilder, TrayIconEvent, TrayIconId, Icon};
+
+// Two icons with explicit, stable IDs.
+let id_a = TrayIconId::new("icon-a");
+let id_b = TrayIconId::new("icon-b");
+
+# let icon_a = Icon::from_rgba(vec![0u8; 4], 1, 1).unwrap();
+# let icon_b = Icon::from_rgba(vec![0u8; 4], 1, 1).unwrap();
+let _tray_a = TrayIconBuilder::new()
+    .with_id(id_a.clone())
+    .with_icon(icon_a)
+    .with_tooltip("Icon A")
+    .build()
+    .unwrap();
+
+let _tray_b = TrayIconBuilder::new()
+    .with_id(id_b.clone())
+    .with_icon(icon_b)
+    .with_tooltip("Icon B")
+    .build()
+    .unwrap();
+
+// Inside your event loop:
+if let Ok(event) = TrayIconEvent::receiver().try_recv() {
+    match event.id() {
+        id if id == &id_a => println!("Event from icon A: {:?}", event),
+        id if id == &id_b => println!("Event from icon B: {:?}", event),
+        _ => {}
+    }
+}
+```
+
+<Tip>
+  Because `TrayIconId` implements `PartialEq<&str>`, you can also compare
+  directly with string literals: `event.id() == "icon-a"`.
+</Tip>

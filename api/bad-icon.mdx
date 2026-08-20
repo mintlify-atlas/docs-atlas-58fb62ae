@@ -1,0 +1,122 @@
+---
+title: "BadIcon — Icon Creation Error Variants"
+sidebarTitle: "BadIcon"
+description: "Reference for BadIcon, the error type returned when Icon creation fails due to invalid RGBA dimensions, byte count issues, or OS-level errors."
+---
+
+`BadIcon` is the error type returned by [`Icon::from_rgba`](/api/icon#from_rgba) (and the Windows-only constructors) when the supplied arguments cannot be used to create a valid icon. It implements both `std::error::Error` and `std::fmt::Display`, so it can be used with standard error-handling libraries like `anyhow` or `thiserror`. The `OsError` variant wraps an `io::Error` whose source can be retrieved via the standard `Error::source` method.
+
+---
+
+## Variants
+
+### `ByteCountNotDivisibleBy4`
+
+```rust
+BadIcon::ByteCountNotDivisibleBy4 { byte_count: usize }
+```
+
+Returned when the length of the `rgba` byte slice is not divisible by 4. Because each RGBA pixel occupies exactly 4 bytes, a buffer whose length is not a multiple of 4 cannot represent whole pixels and is always an error.
+
+<ParamField path="byte_count" type="usize">
+  The actual length of the `rgba` argument that was passed, useful for constructing a helpful error message.
+</ParamField>
+
+**Display message:** `"The length of the rgba argument ({byte_count}) isn't divisible by 4, making it impossible to interpret as 32bpp RGBA pixels."`
+
+---
+
+### `DimensionsVsPixelCount`
+
+```rust
+BadIcon::DimensionsVsPixelCount {
+    width: u32,
+    height: u32,
+    width_x_height: usize,
+    pixel_count: usize,
+}
+```
+
+Returned when `width * height` does not equal `rgba.len() / 4`. The byte buffer must contain exactly the number of pixels implied by the declared dimensions.
+
+<ParamField path="width" type="u32">
+  The `width` argument that was passed to `Icon::from_rgba`.
+</ParamField>
+
+<ParamField path="height" type="u32">
+  The `height` argument that was passed to `Icon::from_rgba`.
+</ParamField>
+
+<ParamField path="width_x_height" type="usize">
+  The expected pixel count computed as `(width * height) as usize`.
+</ParamField>
+
+<ParamField path="pixel_count" type="usize">
+  The actual pixel count derived from the buffer as `rgba.len() / 4`.
+</ParamField>
+
+**Display message:** `"The specified dimensions ({width}x{height}) don't match the number of pixels supplied by the rgba argument ({pixel_count}). For those dimensions, the expected pixel count is {width_x_height}."`
+
+---
+
+### `OsError`
+
+```rust
+BadIcon::OsError(io::Error)
+```
+
+Returned when the platform icon could not be created because an underlying OS call failed. The inner `io::Error` can be retrieved via `std::error::Error::source`.
+
+**Display message:** `"OS error when instantiating the icon: {e:?}"`
+
+---
+
+## Trait implementations
+
+| Trait | Notes |
+|---|---|
+| `std::fmt::Display` | Human-readable description of the error, including the violating values |
+| `std::error::Error` | `source()` returns `Some(&io::Error)` for the `OsError` variant, `None` for the others |
+| `std::fmt::Debug` | Derived |
+
+---
+
+## Example: handling `BadIcon` errors
+
+```rust
+use tray_icon::{Icon, BadIcon};
+
+fn make_icon(rgba: Vec<u8>, width: u32, height: u32) {
+    match Icon::from_rgba(rgba, width, height) {
+        Ok(icon) => {
+            println!("Icon created successfully");
+            // use icon ...
+        }
+        Err(BadIcon::ByteCountNotDivisibleBy4 { byte_count }) => {
+            eprintln!(
+                "RGBA buffer length {byte_count} is not divisible by 4"
+            );
+        }
+        Err(BadIcon::DimensionsVsPixelCount {
+            width,
+            height,
+            width_x_height,
+            pixel_count,
+        }) => {
+            eprintln!(
+                "Expected {width_x_height} pixels for {width}×{height}, \
+                 but buffer contains {pixel_count} pixels"
+            );
+        }
+        Err(BadIcon::OsError(e)) => {
+            eprintln!("OS-level error creating icon: {e}");
+        }
+    }
+}
+
+// Trigger ByteCountNotDivisibleBy4 — 7 bytes is not a multiple of 4
+make_icon(vec![0u8; 7], 1, 1);
+
+// Trigger DimensionsVsPixelCount — 4 bytes = 1 pixel, but 2×2 needs 4
+make_icon(vec![255, 0, 0, 255], 2, 2);
+```

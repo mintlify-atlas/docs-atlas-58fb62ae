@@ -1,0 +1,174 @@
+---
+title: "Icon — Platform Tray Icon Image Handle"
+sidebarTitle: "Icon"
+description: "API reference for the Icon struct, which wraps a platform-specific icon image used for the system tray, with methods for creating icons from RGBA, files, and resources."
+---
+
+`Icon` wraps a platform-specific image handle used to display an icon in the system tray. Every constructor validates the provided pixel data before the handle is created, returning a [`BadIcon`](/api/bad-icon) error if the dimensions or byte count are inconsistent. On Windows, additional constructors let you load icons directly from files, embedded resources, or raw `HICON` handles. On all other platforms, `Icon::from_rgba` is the primary way to produce an icon.
+
+---
+
+## `from_rgba`
+
+```rust
+pub fn from_rgba(rgba: Vec<u8>, width: u32, height: u32) -> Result<Self, BadIcon>
+```
+
+Creates an `Icon` from a raw buffer of 32-bit RGBA pixel data. The buffer is validated before the platform icon is created; if validation fails, a [`BadIcon`](/api/bad-icon) variant is returned that describes exactly which constraint was violated.
+
+### Parameters
+
+<ParamField path="rgba" type="Vec<u8>" required>
+  Raw RGBA pixel bytes. The length must be divisible by 4 (each pixel occupies exactly 4 bytes). If `rgba.len() % 4 != 0`, the call returns `Err(BadIcon::ByteCountNotDivisibleBy4)`.
+</ParamField>
+
+<ParamField path="width" type="u32" required>
+  Width of the icon in pixels. Together with `height`, it must satisfy `width * height == rgba.len() / 4`; otherwise the call returns `Err(BadIcon::DimensionsVsPixelCount)`.
+</ParamField>
+
+<ParamField path="height" type="u32" required>
+  Height of the icon in pixels. See the constraint described for `width` above.
+</ParamField>
+
+### Returns
+
+`Ok(Icon)` on success, or `Err(BadIcon)` if the buffer length or dimensions are invalid, or if the underlying OS call fails.
+
+### Example
+
+```rust
+// Build a 2×2 red icon from raw RGBA bytes.
+let rgba: Vec<u8> = vec![
+    255, 0, 0, 255,  // top-left  — opaque red
+    255, 0, 0, 255,  // top-right — opaque red
+    255, 0, 0, 255,  // bot-left  — opaque red
+    255, 0, 0, 255,  // bot-right — opaque red
+];
+
+let icon = tray_icon::Icon::from_rgba(rgba, 2, 2)
+    .expect("Failed to create icon");
+```
+
+---
+
+## Windows-only constructors
+
+<Note>
+  The following four methods are only available when compiling for **Windows**
+  (`#[cfg(windows)]`). They are not present in the public API on macOS or Linux.
+</Note>
+
+### `from_path`
+
+```rust
+#[cfg(windows)]
+pub fn from_path<P: AsRef<std::path::Path>>(
+    path: P,
+    size: Option<(u32, u32)>,
+) -> Result<Self, BadIcon>
+```
+
+Loads an icon from a file on disk (typically an `.ico` file). Pass `None` for `size` to use the default icon size embedded in the file. When the requested size does not exist, Windows may scale an available size to match.
+
+<ParamField path="path" type="P: AsRef<Path>" required>
+  Path to the icon file, usually a `.ico` file that may contain multiple sizes.
+</ParamField>
+
+<ParamField path="size" type="Option<(u32, u32)>">
+  Desired `(width, height)` in pixels, or `None` to use the file's default size.
+</ParamField>
+
+---
+
+### `from_resource`
+
+```rust
+#[cfg(windows)]
+pub fn from_resource(ordinal: u16, size: Option<(u32, u32)>) -> Result<Self, BadIcon>
+```
+
+Loads an icon from a resource embedded in the current executable or DLL, identified by its numeric ordinal. Pass `None` for `size` to use the default resource size; Windows will scale if the exact size is unavailable.
+
+<ParamField path="ordinal" type="u16" required>
+  The numeric resource ordinal as embedded in the PE resource table.
+</ParamField>
+
+<ParamField path="size" type="Option<(u32, u32)>">
+  Desired `(width, height)` in pixels, or `None` for the default size.
+</ParamField>
+
+---
+
+### `from_resource_name`
+
+```rust
+#[cfg(windows)]
+pub fn from_resource_name(
+    resource_name: &str,
+    size: Option<(u32, u32)>,
+) -> Result<Self, BadIcon>
+```
+
+Like `from_resource`, but the embedded resource is identified by a string name rather than a numeric ordinal.
+
+<ParamField path="resource_name" type="&str" required>
+  The string name of the icon resource as it appears in the PE resource table.
+</ParamField>
+
+<ParamField path="size" type="Option<(u32, u32)>">
+  Desired `(width, height)` in pixels, or `None` for the default size.
+</ParamField>
+
+---
+
+### `from_handle`
+
+```rust
+#[cfg(windows)]
+pub fn from_handle(handle: isize) -> Self
+```
+
+Creates an `Icon` directly from an existing `HICON` handle (represented as `isize`). The caller is responsible for ensuring the handle is valid for the lifetime of the `Icon`.
+
+<ParamField path="handle" type="isize" required>
+  A valid Windows `HICON` handle cast to `isize`.
+</ParamField>
+
+---
+
+## Loading a PNG icon with the `image` crate
+
+<Tip>
+  The `image` crate is the easiest way to load a PNG, JPEG, or other image format and convert it to the raw RGBA bytes required by `Icon::from_rgba`. Add `image` to your `Cargo.toml` dependencies and call `into_rgba8()` on the decoded image.
+</Tip>
+
+The pattern shown below is taken directly from the `tray-icon` examples and is the recommended approach for loading icon assets at runtime:
+
+```rust
+use std::path::Path;
+
+fn load_icon(path: &Path) -> tray_icon::Icon {
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::open(path)
+            .expect("Failed to open icon path")
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+
+    tray_icon::Icon::from_rgba(icon_rgba, icon_width, icon_height)
+        .expect("Failed to create icon from RGBA data")
+}
+
+fn main() {
+    let path = std::path::Path::new("examples/icon.png");
+    let icon = load_icon(path);
+
+    let _tray = tray_icon::TrayIconBuilder::new()
+        .with_icon(icon)
+        .with_tooltip("My application")
+        .build()
+        .unwrap();
+}
+```

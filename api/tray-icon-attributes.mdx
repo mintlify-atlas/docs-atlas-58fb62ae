@@ -1,0 +1,148 @@
+---
+title: "TrayIconAttributes — Tray Icon Configuration"
+sidebarTitle: "TrayIconAttributes"
+description: "Reference for TrayIconAttributes, the configuration struct used directly with TrayIcon::new() to set icon, menu, tooltip, title, and behavior."
+---
+
+`TrayIconAttributes` is the low-level configuration struct that describes the initial state of a system tray icon. It is consumed by [`TrayIcon::new()`](/api/tray-icon) and [`TrayIcon::with_id()`](/api/tray-icon) to create a live icon handle. For most use-cases, [`TrayIconBuilder`](/api/tray-icon-builder) is the preferred ergonomic interface — it populates a `TrayIconAttributes` value internally and adds chainable helpers. Use `TrayIconAttributes` directly when you need to construct or serialize configuration data before committing to a `TrayIcon`.
+
+---
+
+## Struct Definition
+
+```rust
+pub struct TrayIconAttributes {
+    pub tooltip: Option<String>,
+    pub menu: Option<Box<dyn ContextMenu>>,
+    pub icon: Option<Icon>,
+    pub temp_dir_path: Option<PathBuf>,
+    pub icon_is_template: bool,
+    pub menu_on_left_click: bool,
+    pub menu_on_right_click: bool,
+    pub title: Option<String>,
+}
+```
+
+---
+
+## Fields
+
+<ParamField path="tooltip" type="Option<String>" default="None">
+  The tooltip string shown when the user hovers over the tray icon.
+
+  **Platform-specific:**
+  - **Linux:** Unsupported — the value is ignored at runtime.
+</ParamField>
+
+<ParamField path="menu" type="Option<Box<dyn ContextMenu>>" default="None">
+  A boxed context menu that opens when the user interacts with the icon
+  (subject to `menu_on_left_click` / `menu_on_right_click` flags).
+
+  **Platform-specific:**
+  - **Linux:** Once a menu has been assigned it **cannot be removed or
+    replaced**. You can still modify the menu's items in place after the icon
+    is created.
+</ParamField>
+
+<ParamField path="icon" type="Option<Icon>" default="None">
+  The image displayed in the system tray.
+
+  **Platform-specific:**
+  - **Linux:** The icon may not be visible unless `menu` is also set. An
+    empty `Menu` is sufficient to make it appear.
+</ParamField>
+
+<ParamField path="temp_dir_path" type="Option<PathBuf>" default="None">
+  Overrides the directory used to store the temporary icon file. **Linux
+  only.** Defaults to `$XDG_RUNTIME_DIR/tray-icon` or `$TEMP/tray-icon`
+  when `None`. Silently ignored on Windows and macOS.
+</ParamField>
+
+<ParamField path="icon_is_template" type="bool" default="false">
+  When `true`, the icon is treated as a
+  [template image](https://developer.apple.com/documentation/appkit/nsimage/1520017-template)
+  and recolored automatically by the system. **macOS only.** Ignored on
+  Windows and Linux.
+</ParamField>
+
+<ParamField path="menu_on_left_click" type="bool" default="true">
+  When `true`, the context menu opens on a left click.
+
+  **Platform-specific:**
+  - **Linux:** Unsupported — left-click behavior is controlled by the desktop
+    environment.
+</ParamField>
+
+<ParamField path="menu_on_right_click" type="bool" default="true">
+  When `true`, the context menu opens on a right click.
+
+  **Platform-specific:**
+  - **Linux:** Unsupported — right-click behavior is controlled by the desktop
+    environment.
+</ParamField>
+
+<ParamField path="title" type="Option<String>" default="None">
+  A short text label rendered next to the icon in the tray area.
+
+  **Platform-specific:**
+  - **Linux:** Only displayed when `icon` is also set. Useful for counters or
+    short status strings; may not appear in all panel visualizations.
+  - **Windows:** Unsupported — the value is ignored at runtime.
+</ParamField>
+
+---
+
+## Default Values
+
+`TrayIconAttributes` implements `Default`. The table below shows the value each field takes when constructed via `TrayIconAttributes::default()` (or `..Default::default()` in a struct literal):
+
+| Field                | Default       |
+|----------------------|---------------|
+| `tooltip`            | `None`        |
+| `menu`               | `None`        |
+| `icon`               | `None`        |
+| `temp_dir_path`      | `None`        |
+| `icon_is_template`   | `false`       |
+| `menu_on_left_click` | `true`        |
+| `menu_on_right_click`| `true`        |
+| `title`              | `None`        |
+
+---
+
+## Code Example
+
+The snippet below shows how to build a `TrayIconAttributes` struct directly and pass it to `TrayIcon::new()`.
+
+```rust
+use std::path::PathBuf;
+use tray_icon::{TrayIcon, TrayIconAttributes, Icon, menu::Menu};
+
+// Construct an Icon from raw RGBA data
+let icon = Icon::from_rgba(vec![128u8; 32 * 32 * 4], 32, 32)?;
+
+// Build a simple context menu
+let menu = Menu::new();
+
+let attrs = TrayIconAttributes {
+    icon: Some(icon),
+    menu: Some(Box::new(menu)),
+    tooltip: Some("My Application".to_string()),
+    title: Some("v2.1".to_string()),
+    menu_on_left_click: false,    // only open on right-click
+    menu_on_right_click: true,
+    icon_is_template: false,
+    temp_dir_path: Some(PathBuf::from("/tmp/my-app-tray")),
+    // all remaining fields fall back to their Default values
+    ..Default::default()
+};
+
+let tray_icon = TrayIcon::new(attrs)?;
+println!("Created tray icon: {:?}", tray_icon.id());
+```
+
+<Note>
+  All fields are `pub`, so you can mix explicit values with
+  `..Default::default()` for a concise struct literal. When using
+  [`TrayIconBuilder`](/api/tray-icon-builder) you do not need to reference
+  `TrayIconAttributes` directly.
+</Note>

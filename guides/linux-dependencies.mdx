@@ -1,0 +1,121 @@
+---
+title: "Installing Linux and FreeBSD System Dependencies"
+sidebarTitle: "Linux Dependencies"
+description: "Install the required GTK, libxdo, and libappindicator system packages for tray-icon on Arch Linux, Debian/Ubuntu, and FreeBSD."
+---
+
+On Linux and FreeBSD, `tray-icon` relies on several native system libraries that must be installed before you can compile or run your application. Unlike Windows and macOS — where all required APIs ship with the OS — Linux requires GTK for the event loop, libappindicator (or its Ayatana fork) for the tray icon renderer, and optionally libxdo for predefined clipboard menu items. This page lists the packages to install for the most common distributions.
+
+## Why these libraries are needed
+
+<CardGroup cols={3}>
+  <Card title="GTK 3" icon="layer-group">
+    The tray icon must be created on a thread running a GTK event loop. On
+    Linux, `tray-icon` uses GTK internally regardless of which windowing library
+    your application uses.
+  </Card>
+  <Card title="libappindicator" icon="bell">
+    The `AppIndicator` API is what actually renders the icon in the system tray.
+    Without it the crate will not compile on Linux at all.
+  </Card>
+  <Card title="libxdo" icon="clipboard">
+    Required for the predefined `Copy`, `Cut`, `Paste`, and `SelectAll` menu
+    items exposed by the `muda` crate. Enabled by the `libxdo` Cargo feature
+    (on by default).
+  </Card>
+</CardGroup>
+
+## Installing packages
+
+<Tabs>
+  <Tab title="Arch Linux / Manjaro">
+    Use `pacman` to install all three libraries in one command:
+
+    ```sh
+    pacman -S gtk3 xdotool libappindicator-gtk3
+    ```
+
+    <Note>
+      If you prefer the Ayatana fork, replace `libappindicator-gtk3` with
+      `libayatana-appindicator`. Both packages provide the same ABI that
+      `tray-icon` links against.
+    </Note>
+  </Tab>
+
+  <Tab title="Debian / Ubuntu">
+    Install the development headers using `apt`:
+
+    ```sh
+    sudo apt install libgtk-3-dev libxdo-dev libappindicator3-dev
+    ```
+
+    <Note>
+      The Ayatana alternative is `libayatana-appindicator3-dev`. On newer Ubuntu
+      releases (22.04+) the Ayatana package is preferred because the original
+      `libappindicator` is no longer actively maintained upstream.
+    </Note>
+  </Tab>
+
+  <Tab title="FreeBSD">
+    Install the required packages with `pkg`:
+
+    ```sh
+    pkg install -y rust glib pkgconf gtk3
+    ```
+
+    The `rust` and `pkgconf` packages are needed for the Cargo build system to
+    locate and link the native libraries correctly. `glib` is a dependency of
+    GTK 3 and must be explicitly listed on FreeBSD.
+  </Tab>
+</Tabs>
+
+## Cargo features
+
+The `tray-icon` crate exposes two features that correspond directly to the
+system libraries above. Both are **enabled by default**.
+
+```toml
+[dependencies]
+tray-icon = "0.24"
+```
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `gtk` | ✅ | Enables the `libappindicator` dependency and GTK tray support. Required on Linux/FreeBSD. |
+| `libxdo` | ✅ | Links against `libxdo` to power the predefined clipboard menu items (`Copy`, `Cut`, `Paste`, `SelectAll`). |
+| `common-controls-v6` | ❌ | Windows only. Uses `TaskDialogIndirect` from ComCtl32 v6 for the `About` dialog. |
+| `serde` | ❌ | Derives `Serialize` / `Deserialize` for event and ID types. |
+
+### Disabling gtk on non-Linux targets
+
+If your crate targets multiple platforms and you want to avoid pulling in GTK
+on Windows or macOS, disable the default features and re-enable only what you
+need:
+
+```toml
+[dependencies]
+tray-icon = { version = "0.24", default-features = false }
+
+# Re-enable libxdo only — safe on all platforms, no-op on non-Linux
+# tray-icon = { version = "0.24", default-features = false, features = ["libxdo"] }
+```
+
+<Note>
+  The `gtk` feature is a no-op on Windows and macOS at the code level — the
+  feature gate is guarded by `cfg(unix)` — but disabling it avoids needlessly
+  declaring the `libappindicator` dependency in your `Cargo.lock`.
+</Note>
+
+## Verifying the installation
+
+After installing the packages you can confirm that the required `.pc` files are
+present:
+
+```sh
+pkg-config --modversion gtk+-3.0
+pkg-config --modversion appindicator3-0.1
+```
+
+Both commands should print a version string. If either command fails with
+`Package ... not found`, re-check that you installed the correct `-dev` /
+`-devel` package for your distribution.

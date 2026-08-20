@@ -1,47 +1,243 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with tray-icon in 5 Minutes"
+sidebarTitle: "Quickstart"
+description: "Build a working system tray icon with a context menu and event handling in Rust using tray-icon — from Cargo.toml to a running app."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
+This guide walks you from an empty Rust project to a running application that shows a system tray icon, attaches a context menu with a Quit item, and handles both tray and menu events in an event loop. The example below is adapted from the official `tao` example in the `tray-icon` repository.
 
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+<Note>
+  Always create your `TrayIcon` _after_ the event loop has started, not before. On macOS, creating a tray icon before the run loop is active can cause crashes or invisible icons — especially in fullscreen applications. With Tao, the correct place is inside the `Event::NewEvents(StartCause::Init)` handler. With Winit, use `StartCause::Init` inside `new_events`.
+</Note>
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
 
-    ```bash
-    npm install your-package
+  <Step title="Add tray-icon to Cargo.toml">
+    Open your project's `Cargo.toml` and add `tray-icon`, your chosen event loop crate, and the `image` crate for loading PNG icons:
+
+    ```toml
+    [dependencies]
+    tray-icon = "0.24.2"
+    tao = "0.36"
+    image = { version = "0.25", default-features = false, features = ["png"] }
+    ```
+
+    If you are on Linux, also make sure you have the required system libraries installed. See the [Installation](/installation) page for distro-specific commands.
+  </Step>
+
+  <Step title="Load an Icon">
+    `tray-icon` represents icons as raw RGBA pixel data. The most straightforward way to produce an `Icon` at runtime is to decode a PNG file with the `image` crate and pass the resulting bytes to `Icon::from_rgba`:
+
+    ```rust
+    use tray_icon::Icon;
+
+    fn load_icon(path: &std::path::Path) -> Icon {
+        let (icon_rgba, icon_width, icon_height) = {
+            let image = image::open(path)
+                .expect("Failed to open icon path")
+                .into_rgba8();
+            let (width, height) = image.dimensions();
+            let rgba = image.into_raw();
+            (rgba, width, height)
+        };
+        Icon::from_rgba(icon_rgba, icon_width, icon_height)
+            .expect("Failed to create icon")
+    }
+    ```
+
+    You can also construct an `Icon` directly from any `Vec<u8>` of RGBA bytes if you embed the image data at compile time:
+
+    ```rust
+    // Each pixel is four bytes: R, G, B, A
+    let rgba: Vec<u8> = vec![255, 0, 0, 255]; // 1×1 red pixel
+    let icon = Icon::from_rgba(rgba, 1, 1).unwrap();
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
 
-    ```bash
-    your-cli init
+  <Step title="Build the Tray Icon with TrayIconBuilder">
+    Use `TrayIconBuilder` to configure and create the tray icon. Attach a `Menu` from `tray_icon::menu`, set a tooltip, and call `.build()`:
+
+    ```rust
+    use tray_icon::{TrayIconBuilder, menu::{Menu, MenuItem, PredefinedMenuItem, AboutMetadata}};
+
+    // Build the context menu
+    let tray_menu = Menu::new();
+    let quit_item = MenuItem::new("Quit", true, None);
+    tray_menu.append_items(&[
+        &PredefinedMenuItem::about(
+            None,
+            Some(AboutMetadata {
+                name: Some("my-app".to_string()),
+                copyright: Some("Copyright 2024".to_string()),
+                ..Default::default()
+            }),
+        ),
+        &PredefinedMenuItem::separator(),
+        &quit_item,
+    ]).unwrap();
+
+    // Build the tray icon (call this only after the event loop has started)
+    let tray_icon = TrayIconBuilder::new()
+        .with_menu(Box::new(tray_menu.clone()))
+        .with_tooltip("my-app is running")
+        .with_icon(icon)
+        .build()
+        .unwrap();
+    ```
+
+    The `TrayIcon` value is reference-counted — the icon is automatically removed from the system tray when the last `TrayIcon` instance is dropped.
+  </Step>
+
+  <Step title="Handle Events in the Event Loop">
+    Use `TrayIconEvent::set_event_handler` and `MenuEvent::set_event_handler` to forward events into the event loop via an `EventLoopProxy`. This wakes up the loop whenever the user interacts with the tray icon or its menu:
+
+    ```rust
+    use tray_icon::{TrayIconEvent, menu::MenuEvent};
+
+    let proxy = event_loop.create_proxy();
+    TrayIconEvent::set_event_handler(Some(move |event| {
+        proxy.send_event(UserEvent::TrayIconEvent(event));
+    }));
+
+    let proxy = event_loop.create_proxy();
+    MenuEvent::set_event_handler(Some(move |event| {
+        proxy.send_event(UserEvent::MenuEvent(event));
+    }));
+    ```
+
+    Inside the event loop, match on your `UserEvent` variants to respond:
+
+    ```rust
+    Event::UserEvent(UserEvent::TrayIconEvent(event)) => {
+        println!("Tray event: {:?}", event);
+    }
+
+    Event::UserEvent(UserEvent::MenuEvent(event)) => {
+        if event.id == quit_item.id() {
+            tray_icon.take(); // drop the icon before exiting
+            *control_flow = ControlFlow::Exit;
+        }
+    }
     ```
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
 
-    ```bash
-    your-cli start
-    ```
-  </Step>
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Complete Example
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+The following is a minimal but fully working application using `tao`. It creates a tray icon with an About item, a separator, and a Quit item, and exits cleanly when Quit is selected.
+
+```rust
+use tao::{
+    event::Event,
+    event_loop::{ControlFlow, EventLoopBuilder},
+};
+use tray_icon::{
+    menu::{AboutMetadata, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
+    TrayIconBuilder, TrayIconEvent,
+};
+
+enum UserEvent {
+    TrayIconEvent(tray_icon::TrayIconEvent),
+    MenuEvent(tray_icon::menu::MenuEvent),
+}
+
+fn main() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/icon.png");
+
+    let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+
+    // Forward tray and menu events into the event loop
+    let proxy = event_loop.create_proxy();
+    TrayIconEvent::set_event_handler(Some(move |event| {
+        proxy.send_event(UserEvent::TrayIconEvent(event));
+    }));
+
+    let proxy = event_loop.create_proxy();
+    MenuEvent::set_event_handler(Some(move |event| {
+        proxy.send_event(UserEvent::MenuEvent(event));
+    }));
+
+    // Build the context menu before the event loop starts
+    let tray_menu = Menu::new();
+    let quit_i = MenuItem::new("Quit", true, None);
+    tray_menu.append_items(&[
+        &PredefinedMenuItem::about(
+            None,
+            Some(AboutMetadata {
+                name: Some("tao".to_string()),
+                copyright: Some("Copyright tao".to_string()),
+                ..Default::default()
+            }),
+        ),
+        &PredefinedMenuItem::separator(),
+        &quit_i,
+    ]).unwrap();
+
+    // The TrayIcon itself is created inside the event loop (StartCause::Init)
+    let mut tray_icon = None;
+
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
+
+        match event {
+            // Create the tray icon once the event loop is running
+            Event::NewEvents(tao::event::StartCause::Init) => {
+                let icon = load_icon(std::path::Path::new(path));
+
+                tray_icon = Some(
+                    TrayIconBuilder::new()
+                        .with_menu(Box::new(tray_menu.clone()))
+                        .with_tooltip("tao - awesome windowing lib")
+                        .with_icon(icon)
+                        .build()
+                        .unwrap(),
+                );
+            }
+
+            Event::UserEvent(UserEvent::TrayIconEvent(event)) => {
+                println!("{event:?}");
+            }
+
+            Event::UserEvent(UserEvent::MenuEvent(event)) => {
+                println!("{event:?}");
+
+                if event.id == quit_i.id() {
+                    tray_icon.take(); // remove the icon before exit
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
+
+            _ => {}
+        }
+    })
+}
+
+fn load_icon(path: &std::path::Path) -> tray_icon::Icon {
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::open(path)
+            .expect("Failed to open icon path")
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+    tray_icon::Icon::from_rgba(icon_rgba, icon_width, icon_height)
+        .expect("Failed to create icon")
+}
+```
+
+<Tip>
+  If you are using Winit instead of Tao, the structure is nearly identical — implement the `ApplicationHandler` trait and create the tray icon inside `new_events` when `cause == StartCause::Init`. On Linux with Winit, spawn a separate thread to run `gtk::main()` alongside the Winit event loop, since Winit does not use GTK internally.
 </Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Core Concepts" icon="book-open" href="/guides/tray-icon">
+    Learn about TrayIcon, TrayIconBuilder, Icon, and the event model in depth.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/tray-icon-builder">
+    Explore the full API surface for TrayIconBuilder, TrayIconEvent, and the re-exported muda menu types.
+  </Card>
+</CardGroup>

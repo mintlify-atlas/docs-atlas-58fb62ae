@@ -1,0 +1,250 @@
+---
+title: "Platform-Specific Behavior and Constraints"
+sidebarTitle: "Platform Notes"
+description: "Understand how tray-icon behaves differently on Windows, macOS, and Linux, including event loop threading, feature gaps, and native API access."
+---
+
+The `tray-icon` crate runs on Windows, macOS, and Linux/FreeBSD, but each platform has distinct requirements around event loop threading, icon creation timing, native handle access, and supported features. Reading these notes before wiring up your integration will save you from subtle race conditions, invisible icons, and missing events.
+
+<Warning>
+  On Linux and FreeBSD, `TrayIconEvent` is **never emitted** — click events on
+  the tray icon are silently dropped. The context menu still works correctly.
+  If your application logic depends on detecting tray icon clicks, you must
+  guard that code path with a `#[cfg(not(target_os = "linux"))]` attribute.
+</Warning>
+
+<Tabs>
+  <Tab title="Windows">
+    Windows support is built on the Win32 API and is the most feature-complete
+    platform.
+
+    **Event loop**
+
+    A Win32 event loop must be running on the **same thread** that creates the
+    tray icon. The loop does not have to be on the main thread — any thread
+    with a running Win32 message pump is acceptable.
+
+    **Supported events**
+
+    | Event | Supported |
+    |-------|-----------|
+    | `TrayIconEvent::Click` | ✅ |
+    | `TrayIconEvent::DoubleClick` | ✅ Windows only |
+    | `TrayIconEvent::Enter` / `Move` / `Leave` | ✅ |
+
+    **Tooltip**
+
+    Tooltips are supported and rendered as native balloon-style text. The
+    underlying Win32 `NOTIFYICONDATA.szTip` field is limited to **128
+    characters** — text beyond that limit is silently truncated by the OS.
+
+    **Native handle**
+
+    ```rust
+    #[cfg(windows)]
+    let hwnd: windows_sys::Win32::Foundation::HWND = tray_icon.window_handle();
+    ```
+
+    The returned `HWND` is valid for the lifetime of the `TrayIcon` instance
+    and can be passed to any Win32 API that expects a window handle.
+
+    **Loading icons**
+
+    The `Icon` type exposes several Windows-specific constructors in addition to
+    the cross-platform `Icon::from_rgba`:
+
+    - `Icon::from_path` — load from a `.ico` file on disk
+    - `Icon::from_resource` — load an icon embedded in the binary by resource ID
+    - `Icon::from_resource_name` — load an embedded icon by name string
+    - `Icon::from_handle` — wrap an existing `HICON` handle
+
+    **About dialog (common-controls-v6 feature)**
+
+    Enable the `common-controls-v6` Cargo feature to use `TaskDialogIndirect`
+    from `ComCtl32.dll` v6 when showing the predefined `About` menu item. Without
+    this feature the older `MessageBox` API is used instead.
+
+    ```toml
+    [dependencies]
+    tray-icon = { version = "0.24", features = ["common-controls-v6"] }
+    ```
+
+    **Menu click configuration**
+
+    The context menu can be configured to open on a left click, right click, or
+    both. The defaults are `true` for both:
+
+    ```rust
+    TrayIconBuilder::new()
+        .with_menu_on_left_click(false)  // disable on left click
+        .with_menu_on_right_click(true)  // keep on right click
+        // ...
+        .build()?;
+    ```
+
+    **Explorer restart**
+
+    If Windows Explorer restarts (e.g., after a crash), the tray icon is
+    automatically re-registered so its visibility is preserved without any
+    additional code in your application.
+  </Tab>
+
+  <Tab title="macOS">
+    macOS places the tray icon in the system menu bar as an `NSStatusItem`.
+
+    **Event loop and thread requirements**
+
+    The AppKit event loop **must run on the main thread**, which means the tray
+    icon must also be created on the main thread. There are no exceptions to this
+    rule — creating an `NSStatusItem` off the main thread results in undefined
+    behavior.
+
+    **Creation timing**
+
+    You must wait until the event loop is fully running before creating a
+    `TrayIcon`. Creating one before the loop starts can cause issues with
+    fullscreen applications. In winit, the earliest safe point is the
+    `StartCause::Init` event:
+
+    ```rust
+    fn new_events(
+        &mut self,
+        _event_loop: &winit::event_loop::ActiveEventLoop,
+        cause: winit::event::StartCause,
+    ) {
+        if winit::event::StartCause::Init == cause {
+            #[cfg(target_os = "macos")]
+            {
+                self.tray_icon = Some(Self::new_tray_icon());
+            }
+        }
+    }
+    ```
+
+    **Template icons**
+
+    macOS supports [template images](https://developer.apple.com/documentation/appkit/nsimage/1520017-template)
+    that automatically adapt to light and dark menu bar appearances. Enable this
+    with `with_icon_as_template`:
+
+    ```rust
+    TrayIconBuilder::new()
+        .with_icon(icon)
+        .with_icon_as_template(true)
+        .build()?;
+    ```
+
+    You can also toggle it at runtime:
+
+    ```rust
+    tray_icon.set_icon_as_template(true);
+    ```
+
+    **Native handle**
+
+    ```rust
+    #[cfg(target_os = "macos")]
+    if let Some(item) = tray_icon.ns_status_item() {
+        // item is objc2::rc::Retained<objc2_app_kit::NSStatusItem>
+    }
+    ```
+
+    **Title next to icon**
+
+    `with_title` / `set_title` renders a text string to the right of the icon
+    in the menu bar. This is useful for counters or status text. Windows does
+    **not** support `title`.
+
+    **Unsupported features on macOS**
+
+    - `TrayIconEvent::DoubleClick` is not emitted.
+    - `tooltip` is technically accepted but has no visible effect in modern
+      macOS menu bar items.
+  </Tab>
+
+  <Tab title="Linux / FreeBSD">
+    Linux and FreeBSD use [libappindicator](https://launchpad.net/libappindicator)
+    (or the drop-in replacement [libayatana-appindicator](https://github.com/AyatanaIndicators/libayatana-appindicator))
+    to render the tray icon in a compatible system tray.
+
+    **Event loop**
+
+    A GTK event loop must be running on the thread that creates the tray icon.
+    Importantly, this does **not** have to be the same thread as your windowing
+    library. When using winit or egui (which use their own event loops and do
+    not run a GTK loop), you must spawn a dedicated thread:
+
+    ```rust
+    #[cfg(target_os = "linux")]
+    std::thread::spawn(|| {
+        gtk::init().unwrap();
+        let _tray_icon = TrayIconBuilder::new()
+            .with_menu(Box::new(Menu::new()))
+            .with_icon(icon)
+            .build()
+            .unwrap();
+        gtk::main();
+    });
+    ```
+
+    **TrayIconEvent not emitted**
+
+    `TrayIconEvent` click/move/enter/leave events are **never fired** on Linux or
+    FreeBSD. The tray icon will still display a context menu on right-click. If
+    you need to respond to tray icon clicks you must use the menu as the primary
+    interaction mechanism on this platform.
+
+    **Tooltip**
+
+    `with_tooltip` / `set_tooltip` is accepted by the builder but has **no
+    visible effect** on Linux. The call succeeds silently.
+
+    **Menu constraints**
+
+    Once a menu is attached to a tray icon it **cannot be removed** — calling
+    `set_menu(None)` has no effect. You can, however, modify the menu's content
+    (add/remove items) after the fact.
+
+    **Icon visibility**
+
+    On some desktop environments the icon is not visible unless a menu is set.
+    Attaching an empty `Menu::new()` is sufficient:
+
+    ```rust
+    TrayIconBuilder::new()
+        .with_menu(Box::new(Menu::new()))
+        .with_icon(icon)
+        .build()?;
+    ```
+
+    **Native handle**
+
+    ```rust
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let ptr: *const libappindicator::AppIndicator = unsafe {
+        tray_icon.app_indicator()
+    };
+    ```
+
+    The pointer is valid as long as the `TrayIcon` is alive.
+
+    **Temp dir for icon file**
+
+    On Linux, the icon image is written to disk so that libappindicator can load
+    it. By default the path is `$XDG_RUNTIME_DIR/tray-icon` or
+    `$TEMP/tray-icon`. Override it with `with_temp_dir_path`:
+
+    ```rust
+    TrayIconBuilder::new()
+        .with_temp_dir_path("/run/user/1000/my-app")
+        .with_icon(icon)
+        .build()?;
+    ```
+
+    **`menu_on_left_click` / `menu_on_right_click`**
+
+    These builder methods are accepted but have **no effect** on Linux. Menu
+    display is entirely controlled by the desktop environment's AppIndicator
+    implementation.
+  </Tab>
+</Tabs>

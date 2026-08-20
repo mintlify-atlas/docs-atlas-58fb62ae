@@ -1,0 +1,273 @@
+---
+title: "Adding Context Menus to Tray Icons"
+sidebarTitle: "Menus"
+description: "Attach and manage context menus on tray icons using the muda crate, which is re-exported as tray_icon::menu."
+---
+
+The `tray-icon` crate re-exports the [`muda`](https://crates.io/crates/muda) crate under `tray_icon::menu`, giving you a full-featured context menu library without an extra dependency declaration. You can build menus with items, separators, and predefined OS-level actions, attach them to a tray icon at creation time, and swap or update them at runtime. This guide covers the complete workflow from menu construction to handling item-click events.
+
+## The muda crate
+
+All menu types come from the `muda` crate, re-exported at `tray_icon::menu`:
+
+```rust
+use tray_icon::menu::{
+    Menu,
+    MenuItem,
+    PredefinedMenuItem,
+    AboutMetadata,
+    MenuEvent,
+};
+```
+
+Because `muda` is re-exported, you do **not** need to add it separately to `Cargo.toml`:
+
+```toml
+[dependencies]
+tray-icon = "0"
+# muda is already included via tray-icon
+```
+
+## Creating a Menu
+
+`Menu::new()` creates an empty top-level context menu. Items are appended one at a time with `append`, or in bulk with `append_items`:
+
+```rust
+use tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem, AboutMetadata};
+
+let tray_menu = Menu::new();
+
+let quit_item = MenuItem::new("Quit", true, None);
+
+tray_menu.append_items(&[
+    &PredefinedMenuItem::about(
+        None,
+        Some(AboutMetadata {
+            name: Some("My App".to_string()),
+            copyright: Some("Copyright © 2024 My Company".to_string()),
+            ..Default::default()
+        }),
+    ),
+    &PredefinedMenuItem::separator(),
+    &quit_item,
+]).unwrap();
+```
+
+## MenuItem
+
+`MenuItem` represents a simple clickable entry in a menu.
+
+```rust
+// MenuItem::new(text, enabled, accelerator)
+let item = MenuItem::new("Open Settings", true, None);
+
+// Create a disabled item
+let disabled = MenuItem::new("Processing…", false, None);
+```
+
+Each `MenuItem` has an `.id()` method that returns a unique `MenuId`. This id is used when checking which item was clicked in a `MenuEvent`.
+
+## PredefinedMenuItem
+
+`PredefinedMenuItem` wraps common OS-level menu actions that the platform implements natively.
+
+<CardGroup cols={2}>
+  <Card title="separator" icon="minus">
+    Inserts a visual dividing line between groups of items.
+
+    ```rust
+    let sep = PredefinedMenuItem::separator();
+    tray_menu.append(&sep).unwrap();
+    ```
+  </Card>
+  <Card title="about" icon="circle-info">
+    Shows the OS-native About dialog populated with `AboutMetadata`.
+
+    ```rust
+    let about = PredefinedMenuItem::about(
+        None, // use default label
+        Some(AboutMetadata {
+            name: Some("tao".to_string()),
+            copyright: Some("Copyright tao".to_string()),
+            ..Default::default()
+        }),
+    );
+    ```
+  </Card>
+</CardGroup>
+
+`AboutMetadata` accepts many optional fields including `name`, `version`, `authors`, `comments`, `copyright`, `license`, `website`, and `website_label`. Any fields left as `None` are omitted from the dialog.
+
+## Attaching a menu to a tray icon
+
+Pass the menu wrapped in a `Box<dyn ContextMenu>` to `with_menu` on the builder:
+
+```rust
+use tray_icon::{TrayIconBuilder, Icon};
+use tray_icon::menu::Menu;
+
+let tray_menu = Menu::new();
+// … populate menu …
+
+let tray_icon = TrayIconBuilder::new()
+    .with_icon(icon)
+    .with_menu(Box::new(tray_menu))
+    .with_tooltip("My Application")
+    .build()
+    .unwrap();
+```
+
+## Replacing a menu at runtime
+
+Use `set_menu` to swap the context menu after the tray icon is created:
+
+```rust
+let new_menu = Menu::new();
+// … populate new_menu …
+tray_icon.set_menu(Some(Box::new(new_menu)));
+
+// Pass None to remove the menu (no-op on Linux)
+tray_icon.set_menu(None);
+```
+
+<Warning>
+On Linux, once a menu has been set it **cannot** be removed — passing `None` has no effect. You can still modify the existing menu's contents by appending, removing, or toggling items.
+</Warning>
+
+## Handling menu events
+
+When a user clicks a menu item, a `MenuEvent` is sent. There are two ways to receive these events.
+
+### Channel receiver
+
+`MenuEvent::receiver()` returns a reference to a `crossbeam_channel` receiver. Call `try_recv()` in your event loop to drain pending events:
+
+```rust
+use tray_icon::menu::MenuEvent;
+
+let menu_channel = MenuEvent::receiver();
+
+// Inside your event loop:
+if let Ok(event) = menu_channel.try_recv() {
+    println!("Menu item clicked: {:?}", event.id);
+}
+```
+
+### Custom event handler
+
+`MenuEvent::set_event_handler` installs a closure that is called synchronously for every event. Setting a handler disables the channel receiver.
+
+```rust
+use tray_icon::menu::MenuEvent;
+
+MenuEvent::set_event_handler(Some(|event: MenuEvent| {
+    println!("Clicked: {:?}", event.id);
+}));
+
+// Remove the handler and re-enable the channel
+MenuEvent::set_event_handler::<fn(MenuEvent)>(None);
+```
+
+## Checking which item was clicked
+
+Compare `event.id` with the `.id()` of the menu item you want to match:
+
+```rust
+use tray_icon::menu::{MenuEvent, MenuItem};
+
+let quit_item = MenuItem::new("Quit", true, None);
+
+// In your event handler or channel poll loop:
+if let Ok(event) = MenuEvent::receiver().try_recv() {
+    if event.id == quit_item.id() {
+        println!("Quit was clicked");
+        std::process::exit(0);
+    }
+}
+```
+
+## Full example (tao)
+
+The following example, drawn from the `tao` example in the repository, shows the complete flow: building the menu, wiring up the event handler to forward events into the tao event loop, and acting on the quit item.
+
+```rust
+use tao::{
+    event::Event,
+    event_loop::{ControlFlow, EventLoopBuilder},
+};
+use tray_icon::{
+    menu::{AboutMetadata, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
+    TrayIconBuilder, TrayIconEvent,
+};
+
+enum UserEvent {
+    TrayIconEvent(tray_icon::TrayIconEvent),
+    MenuEvent(tray_icon::menu::MenuEvent),
+}
+
+fn main() {
+    let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+
+    let proxy = event_loop.create_proxy();
+    TrayIconEvent::set_event_handler(Some(move |event| {
+        proxy.send_event(UserEvent::TrayIconEvent(event));
+    }));
+
+    let proxy = event_loop.create_proxy();
+    MenuEvent::set_event_handler(Some(move |event| {
+        proxy.send_event(UserEvent::MenuEvent(event));
+    }));
+
+    let tray_menu = Menu::new();
+    let quit_i = MenuItem::new("Quit", true, None);
+    tray_menu.append_items(&[
+        &PredefinedMenuItem::about(
+            None,
+            Some(AboutMetadata {
+                name: Some("tao".to_string()),
+                copyright: Some("Copyright tao".to_string()),
+                ..Default::default()
+            }),
+        ),
+        &PredefinedMenuItem::separator(),
+        &quit_i,
+    ]).unwrap();
+
+    let mut tray_icon = None;
+
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
+
+        match event {
+            Event::NewEvents(tao::event::StartCause::Init) => {
+                let icon = load_icon(std::path::Path::new("examples/icon.png"));
+
+                tray_icon = Some(
+                    TrayIconBuilder::new()
+                        .with_menu(Box::new(tray_menu.clone()))
+                        .with_tooltip("tao - awesome windowing lib")
+                        .with_icon(icon)
+                        .build()
+                        .unwrap(),
+                );
+            }
+
+            Event::UserEvent(UserEvent::MenuEvent(event)) => {
+                if event.id == quit_i.id() {
+                    tray_icon.take(); // drop the icon before exiting
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
+
+            _ => {}
+        }
+    });
+}
+
+fn load_icon(path: &std::path::Path) -> tray_icon::Icon {
+    let image = image::open(path).unwrap().into_rgba8();
+    let (width, height) = image.dimensions();
+    let rgba = image.into_raw();
+    tray_icon::Icon::from_rgba(rgba, width, height).unwrap()
+}
+```

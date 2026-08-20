@@ -1,72 +1,98 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "tray-icon",
+  "theme": "luma",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
-  },
-  "favicon": "/favicon.svg",
-  "navigation": {
-    "pages": [
-      {
-        "group": "Getting Started",
-        "pages": [
-          "index",
-          "quickstart"
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "primary": "#0F172A",
+    "light": "#F8FAFC",
+    "dark": "#0F172A"
   },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
+      "type": "github",
+      "href": "https://github.com/tauri-apps/tray-icon"
     }
-  },
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
-    ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/tauri-apps/tray-icon"
     }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guide",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "guides/tray-icon",
+              "guides/icons",
+              "guides/menus",
+              "guides/event-handling"
+            ]
+          },
+          {
+            "group": "Platform Notes",
+            "pages": [
+              "guides/platform-notes",
+              "guides/linux-dependencies"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/winit",
+              "examples/tao",
+              "examples/egui"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Tray Icon",
+            "pages": [
+              "api/tray-icon-builder",
+              "api/tray-icon",
+              "api/tray-icon-attributes"
+            ]
+          },
+          {
+            "group": "Icons",
+            "pages": [
+              "api/icon",
+              "api/bad-icon"
+            ]
+          },
+          {
+            "group": "Events",
+            "pages": [
+              "api/tray-icon-event",
+              "api/mouse-button",
+              "api/rect"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/tray-icon-id",
+              "api/error",
+              "api/menu"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

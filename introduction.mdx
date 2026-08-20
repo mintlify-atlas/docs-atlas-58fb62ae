@@ -1,0 +1,70 @@
+---
+title: "tray-icon: Cross-Platform System Tray Icons in Rust"
+sidebarTitle: "Introduction"
+description: "tray-icon is a Rust library for creating system tray icons with context menus and mouse event handling on Windows, macOS, and Linux."
+---
+
+`tray-icon` is a Rust library that lets you create and manage system tray icons for desktop applications. It provides a clean builder API for attaching icons, tooltips, and context menus to the system tray, along with a channel-based event model for reacting to mouse clicks and hover interactions — all from a single, cross-platform codebase.
+
+## What Is tray-icon?
+
+`tray-icon` is the crate that powers Tauri's built-in tray icon support. It abstracts over the native system tray APIs on each platform — the Win32 notification area on Windows, `NSStatusItem` on macOS, and `libappindicator`/`libayatana-appindicator` on Linux — so you get a consistent interface without writing platform-specific code yourself.
+
+The crate pairs with [`muda`](https://github.com/tauri-apps/muda) for context menus, which is re-exported as `tray_icon::menu` so you never need to add `muda` as a separate dependency.
+
+## Supported Platforms
+
+`tray-icon` runs on all major desktop operating systems:
+
+| Platform | Status | Event Loop Requirement |
+|---|---|---|
+| **Windows** | ✅ Supported | Win32 event loop on the same thread as the tray icon |
+| **macOS** | ✅ Supported | Event loop must run on the main thread; create the icon after the loop starts |
+| **Linux** | ✅ Supported (GTK only) | GTK event loop on the same thread as the tray icon |
+| **FreeBSD** | ✅ Supported (GTK only) | GTK event loop on the same thread as the tray icon |
+
+### Platform-Specific Notes
+
+- **Windows & Linux/FreeBSD:** The event loop does not need to run on the main thread, but the tray icon must be created on the same thread that runs the loop.
+- **macOS:** The event loop _must_ run on the main thread, so the tray icon must also be created on the main thread. Additionally, the event loop must already be running before you create a `TrayIcon` — with Winit, the earliest safe point is the [`StartCause::Init`](https://docs.rs/winit/latest/winit/event/enum.StartCause.html#variant.Init) event.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Builder API" icon="hammer">
+    Construct tray icons with `TrayIconBuilder` using a fluent chainable interface for icon, tooltip, title, and menu configuration.
+  </Card>
+  <Card title="Context Menu Support" icon="list">
+    Attach rich context menus via the bundled `tray_icon::menu` module, which re-exports the full `muda` crate API including predefined items and separators.
+  </Card>
+  <Card title="Mouse Event Handling" icon="cursor-arrow-rays">
+    Receive fine-grained tray events including `Click`, `DoubleClick`, `Enter`, `Move`, and `Leave` with position and button metadata.
+  </Card>
+  <Card title="Custom Event Handlers" icon="bolt">
+    Use `TrayIconEvent::set_event_handler` to forward events directly into a Winit or Tao `EventLoopProxy`, keeping your event loop reactive without polling.
+  </Card>
+  <Card title="Cross-Platform Icon Loading" icon="image">
+    Load icons from raw RGBA bytes with `Icon::from_rgba`, or use the `image` crate to decode PNG files — the same code works on every platform.
+  </Card>
+  <Card title="Serde Support" icon="brackets-curly">
+    Enable the `serde` feature to get `Serialize`/`Deserialize` derives on all public event and state types for logging, IPC, or persistence.
+  </Card>
+</CardGroup>
+
+## The `tray_icon::menu` Module
+
+`tray-icon` re-exports the entire [`muda`](https://github.com/tauri-apps/muda) crate under `tray_icon::menu`. This means you get access to `Menu`, `MenuItem`, `PredefinedMenuItem`, `MenuEvent`, `AboutMetadata`, and more without listing `muda` in your own `Cargo.toml`.
+
+```rust
+use tray_icon::menu::{Menu, MenuItem, PredefinedMenuItem, MenuEvent};
+
+let tray_menu = Menu::new();
+let quit_item = MenuItem::new("Quit", true, None);
+tray_menu.append(&quit_item).unwrap();
+```
+
+## Get Started
+
+<Card title="Quickstart" icon="rocket" href="/quickstart">
+  Build a working tray icon with a context menu and event handling in under 5 minutes.
+</Card>

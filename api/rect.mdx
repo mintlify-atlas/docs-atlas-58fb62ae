@@ -1,0 +1,111 @@
+---
+title: "Rect — Tray Icon Position and Size"
+sidebarTitle: "Rect"
+description: "Reference for the Rect struct, which describes the physical screen position and size of the tray icon region, included in all TrayIconEvent variants."
+---
+
+`Rect` is a plain data struct that bundles the physical on-screen position and pixel dimensions of a tray icon. It is included as the `rect` field in every [`TrayIconEvent`](/api/tray-icon-event) variant, and can also be retrieved at any time via `TrayIcon::rect()`. All coordinates use physical pixels — no DPI scaling is applied — matching the convention used by `PhysicalPosition` and `PhysicalSize` throughout the `muda` / `dpi` crate family. The `dpi` module is re-exported from the [`muda`](https://docs.rs/muda) crate as `tray_icon::dpi`.
+
+<Note>
+  **Linux:** `TrayIcon::rect()` always returns `None` on Linux. The `rect` field carried by `TrayIconEvent` variants is also unreliable on Linux because tray events are not emitted on that platform.
+</Note>
+
+---
+
+## Struct definition
+
+```rust
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct Rect {
+    pub size: dpi::PhysicalSize<u32>,
+    pub position: dpi::PhysicalPosition<f64>,
+}
+```
+
+---
+
+## Fields
+
+<ParamField path="size" type="dpi::PhysicalSize<u32>">
+  The width and height of the tray icon region in physical pixels. Accessed as `.size.width` and `.size.height`.
+</ParamField>
+
+<ParamField path="position" type="dpi::PhysicalPosition<f64>">
+  The top-left corner of the tray icon region in physical screen coordinates. Accessed as `.position.x` and `.position.y`. `f64` is used to allow for sub-pixel accuracy when reported by the OS.
+</ParamField>
+
+---
+
+## Default value
+
+`Rect` implements `Default`, yielding a zero-sized rectangle at the origin:
+
+```rust
+Rect {
+    size: PhysicalSize::new(0, 0),
+    position: PhysicalPosition::new(0.0, 0.0),
+}
+```
+
+---
+
+## Trait implementations
+
+| Trait | Notes |
+|---|---|
+| `Clone` / `Copy` | Can be passed by value without heap allocation. |
+| `PartialEq` | Two `Rect` values are equal when both `size` and `position` are equal. |
+| `Debug` | Structured debug output showing both fields. |
+| `Default` | Zero-sized rect at the origin — see above. |
+| `Serialize` / `Deserialize` | Available with the **`serde`** feature. Serialises as `{ "size": { "width": u32, "height": u32 }, "position": { "x": f64, "y": f64 } }`. |
+
+---
+
+## Where `Rect` appears
+
+- **All `TrayIconEvent` variants** — `Click`, `DoubleClick`, `Enter`, `Move`, and `Leave` each carry a `rect` field.
+- **`TrayIcon::rect() -> Option<Rect>`** — returns the current bounding box of the tray icon on demand. Returns `None` on Linux and when the icon's position cannot be determined.
+
+---
+
+## Example: reading `Rect` from a click event
+
+```rust
+use tray_icon::{TrayIconEvent, MouseButton, MouseButtonState};
+
+if let Ok(event) = TrayIconEvent::receiver().try_recv() {
+    if let TrayIconEvent::Click { rect, position, button, .. } = event {
+        println!(
+            "Tray icon occupies {}×{} px, top-left at ({}, {})",
+            rect.size.width,
+            rect.size.height,
+            rect.position.x,
+            rect.position.y,
+        );
+        println!(
+            "Cursor was at ({}, {}) when {:?} was clicked",
+            position.x, position.y, button
+        );
+    }
+}
+```
+
+### Retrieving `Rect` directly from a `TrayIcon`
+
+```rust
+use tray_icon::TrayIconBuilder;
+
+let tray = TrayIconBuilder::new()
+    .with_tooltip("My app")
+    .build()
+    .unwrap();
+
+// rect() returns None on Linux and when the position is unavailable.
+if let Some(rect) = tray.rect() {
+    println!(
+        "Icon is at ({}, {}), size {}×{}",
+        rect.position.x, rect.position.y,
+        rect.size.width, rect.size.height
+    );
+}
+```

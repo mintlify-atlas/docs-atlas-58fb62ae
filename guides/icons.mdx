@@ -1,0 +1,231 @@
+---
+title: "Loading and Configuring Tray Icon Images"
+sidebarTitle: "Icons"
+description: "Load tray icon images from RGBA bytes, PNG files, or Windows resources, and configure template icons on macOS."
+---
+
+Tray icons are represented by the `Icon` type, which wraps a platform-specific image handle. Every `TrayIconBuilder` and runtime `set_icon` call accepts an `Icon` value. This guide explains the available constructors, platform-specific loading methods, and how to use template icons on macOS for automatic light/dark mode adaptation.
+
+## The Icon type
+
+`Icon` is a cloneable handle to a platform-native icon. It is created from raw pixel data or (on Windows) from files and embedded resources, and is then passed to the builder or to `set_icon`. The underlying platform handle is released when the last clone is dropped.
+
+```rust
+use tray_icon::Icon;
+
+// An Icon is built from RGBA pixel data …
+let icon: Icon = Icon::from_rgba(rgba_bytes, width, height)?;
+
+// … and can be freely cloned without copying the pixel data
+let icon2 = icon.clone();
+```
+
+## Icon::from\_rgba
+
+The universal constructor available on all platforms. It validates the input and creates an `Icon` from raw 32-bit RGBA pixel data.
+
+```rust
+pub fn from_rgba(rgba: Vec<u8>, width: u32, height: u32) -> Result<Self, BadIcon>
+```
+
+| Parameter | Type | Description |
+|---|---|---|
+| `rgba` | `Vec<u8>` | Raw pixel bytes in RGBA order. Length must equal `width × height × 4`. |
+| `width` | `u32` | Width of the image in pixels. |
+| `height` | `u32` | Height of the image in pixels. |
+
+### Loading a PNG file with the image crate
+
+The easiest way to load an icon from a file is with the [`image`](https://crates.io/crates/image) crate, which decodes any supported format to RGBA bytes:
+
+```rust
+fn load_icon(path: &std::path::Path) -> tray_icon::Icon {
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::open(path)
+            .expect("Failed to open icon path")
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+    tray_icon::Icon::from_rgba(icon_rgba, icon_width, icon_height)
+        .expect("Failed to create icon")
+}
+```
+
+Add the dependency to your `Cargo.toml`:
+
+```toml
+[dependencies]
+tray-icon = "0"
+image = "0"
+```
+
+## Windows-only constructors
+
+On Windows, `Icon` exposes three additional constructors that load icons directly from the file system or from resources compiled into the executable.
+
+<CardGroup cols={2}>
+  <Card title="Icon::from_path" icon="folder-open">
+    Load an `.ico` file from the file system. Pass `None` for `size` to use the file's default size; Windows will scale if the requested size is unavailable.
+
+    ```rust
+    #[cfg(windows)]
+    let icon = Icon::from_path("assets/app.ico", None)?;
+
+    // Load a specific size
+    #[cfg(windows)]
+    let icon = Icon::from_path("assets/app.ico", Some((32, 32)))?;
+    ```
+
+    ```rust
+    pub fn from_path<P: AsRef<std::path::Path>>(
+        path: P,
+        size: Option<(u32, u32)>,
+    ) -> Result<Self, BadIcon>
+    ```
+  </Card>
+  <Card title="Icon::from_resource" icon="box">
+    Load an icon embedded in the executable by its **ordinal** resource ID. Useful when the icon is compiled in via a `.rc` file.
+
+    ```rust
+    #[cfg(windows)]
+    // Resource ordinal 1, default size
+    let icon = Icon::from_resource(1, None)?;
+    ```
+
+    ```rust
+    pub fn from_resource(
+        ordinal: u16,
+        size: Option<(u32, u32)>,
+    ) -> Result<Self, BadIcon>
+    ```
+  </Card>
+  <Card title="Icon::from_resource_name" icon="tag">
+    Like `from_resource`, but identifies the embedded resource by its **string name** instead of an ordinal ID.
+
+    ```rust
+    #[cfg(windows)]
+    let icon = Icon::from_resource_name("MY_APP_ICON", None)?;
+    ```
+
+    ```rust
+    pub fn from_resource_name(
+        resource_name: &str,
+        size: Option<(u32, u32)>,
+    ) -> Result<Self, BadIcon>
+    ```
+  </Card>
+  <Card title="Icon::from_handle" icon="link">
+    Wrap an existing `HICON` handle (represented as `isize`) that was obtained from another Win32 API call.
+
+    ```rust
+    #[cfg(windows)]
+    let icon = Icon::from_handle(hicon_value);
+    ```
+
+    ```rust
+    pub fn from_handle(handle: isize) -> Self
+    ```
+  </Card>
+</CardGroup>
+
+## Template icons on macOS
+
+On macOS, a *template image* is a monochrome image that the system composites with the correct foreground color at render time based on the current appearance (light, dark, high-contrast). Using a template icon ensures your tray icon looks correct in every macOS appearance mode without you needing to ship separate icon variants.
+
+<Tip>
+Always use template icons for tray icon images on macOS. A white-on-transparent PNG will automatically render as dark in light mode and light in dark mode when marked as a template, giving a native look with zero extra work.
+</Tip>
+
+### Setting template mode at build time
+
+Use `with_icon_as_template` on `TrayIconBuilder`:
+
+```rust
+let tray_icon = TrayIconBuilder::new()
+    .with_icon(icon)
+    .with_icon_as_template(true) // macOS only; no-op on other platforms
+    .build()
+    .unwrap();
+```
+
+### Changing template mode at runtime
+
+Call `set_icon_as_template` on an existing `TrayIcon`:
+
+```rust
+// Switch to template rendering
+tray_icon.set_icon_as_template(true);
+
+// Revert to full-colour rendering
+tray_icon.set_icon_as_template(false);
+```
+
+This method is a no-op on Windows and Linux — it is safe to call unconditionally.
+
+### Atomically update icon and template flag
+
+`set_icon_with_as_template` replaces the icon image and the template flag in a single call on macOS:
+
+```rust
+tray_icon.set_icon_with_as_template(Some(new_icon), true).unwrap();
+```
+
+## The BadIcon error
+
+`Icon::from_rgba` and the Windows file-based constructors return `Result<Icon, BadIcon>`. `BadIcon` has three variants:
+
+<CardGroup cols={3}>
+  <Card title="ByteCountNotDivisibleBy4" icon="triangle-exclamation">
+    The `rgba` byte slice length is not divisible by 4, so it cannot represent 32bpp RGBA pixels.
+
+    ```
+    byte_count: usize
+    ```
+  </Card>
+  <Card title="DimensionsVsPixelCount" icon="ruler-combined">
+    `width × height` does not equal `rgba.len() / 4`. At least one dimension or the byte slice is wrong.
+
+    ```
+    width, height, width_x_height, pixel_count: usize
+    ```
+  </Card>
+  <Card title="OsError" icon="circle-xmark">
+    The underlying OS call failed. Wraps a `std::io::Error`.
+  </Card>
+</CardGroup>
+
+```rust
+use tray_icon::{Icon, BadIcon};
+
+match Icon::from_rgba(bytes, width, height) {
+    Ok(icon) => { /* use icon */ }
+    Err(BadIcon::ByteCountNotDivisibleBy4 { byte_count }) => {
+        eprintln!("RGBA length {byte_count} is not divisible by 4");
+    }
+    Err(BadIcon::DimensionsVsPixelCount { width, height, pixel_count, .. }) => {
+        eprintln!("{}×{} needs {} pixels, got {}", width, height, width * height, pixel_count);
+    }
+    Err(BadIcon::OsError(e)) => {
+        eprintln!("OS error: {e}");
+    }
+}
+```
+
+## Linux note
+
+On Linux the icon is written to a temporary file before being passed to `libappindicator`. Sometimes the icon won't appear unless a menu is also set — even an empty `Menu::new()` is enough to make it visible:
+
+```rust
+use tray_icon::{TrayIconBuilder, Icon};
+use tray_icon::menu::Menu;
+
+let tray_icon = TrayIconBuilder::new()
+    .with_icon(icon)
+    .with_menu(Box::new(Menu::new())) // ensures icon visibility on Linux
+    .build()
+    .unwrap();
+```
+
+You can override the temporary directory used to store the icon file with `with_temp_dir_path` (builder) or `set_temp_dir_path` (runtime). By default the crate uses `$XDG_RUNTIME_DIR/tray-icon` or `$TEMP/tray-icon`.

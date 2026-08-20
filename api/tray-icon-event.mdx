@@ -1,0 +1,219 @@
+---
+title: "TrayIconEvent — Mouse Events for Tray Icons"
+sidebarTitle: "TrayIconEvent"
+description: "API reference for TrayIconEvent, the enum of mouse events emitted by a tray icon including click, double-click, enter, move, and leave variants."
+---
+
+`TrayIconEvent` is the enum that describes every mouse interaction dispatched by a tray icon. Events are either delivered through a shared channel (accessible via `TrayIconEvent::receiver`) or forwarded to a custom handler registered with `TrayIconEvent::set_event_handler`. The enum is marked `#[non_exhaustive]`, so pattern matches must include a catch-all arm to remain forwards-compatible as new variants are introduced. With the `serde` feature enabled, the enum serialises with a `"type"` tag and the `Click` variant uses `camelCase` field names.
+
+<Note>
+  **Linux:** `TrayIconEvent` is not emitted on Linux. The tray icon will still appear and display a context menu on right-click, but no `TrayIconEvent` variants are dispatched.
+</Note>
+
+---
+
+## Variants
+
+### `Click`
+
+```rust
+TrayIconEvent::Click {
+    id: TrayIconId,
+    position: dpi::PhysicalPosition<f64>,
+    rect: Rect,
+    button: MouseButton,
+    button_state: MouseButtonState,
+}
+```
+
+A mouse button was pressed or released over the tray icon.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `TrayIconId` | Identifies which tray icon triggered the event. |
+| `position` | `PhysicalPosition<f64>` | Physical cursor position (in screen pixels) when the click occurred. |
+| `rect` | `Rect` | Bounding rectangle of the tray icon on screen. |
+| `button` | `MouseButton` | Which mouse button was involved: `Left`, `Right`, or `Middle`. |
+| `button_state` | `MouseButtonState` | Whether the button is `Down` (pressed) or `Up` (released). |
+
+With `serde` enabled, field names are serialised as `camelCase` (e.g. `buttonState`).
+
+---
+
+### `DoubleClick`
+
+```rust
+TrayIconEvent::DoubleClick {
+    id: TrayIconId,
+    position: dpi::PhysicalPosition<f64>,
+    rect: Rect,
+    button: MouseButton,
+}
+```
+
+A double-click occurred on the tray icon.
+
+<Note>
+  **Windows only.** This variant is only emitted on Windows. macOS and Linux do not produce `DoubleClick` events.
+</Note>
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `TrayIconId` | Identifies which tray icon triggered the event. |
+| `position` | `PhysicalPosition<f64>` | Physical cursor position when the double-click occurred. |
+| `rect` | `Rect` | Bounding rectangle of the tray icon on screen. |
+| `button` | `MouseButton` | Which mouse button was double-clicked. |
+
+---
+
+### `Enter`
+
+```rust
+TrayIconEvent::Enter {
+    id: TrayIconId,
+    position: dpi::PhysicalPosition<f64>,
+    rect: Rect,
+}
+```
+
+The mouse cursor has entered the tray icon's bounding region.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `TrayIconId` | Identifies which tray icon triggered the event. |
+| `position` | `PhysicalPosition<f64>` | Physical cursor position at the moment of entry. |
+| `rect` | `Rect` | Bounding rectangle of the tray icon on screen. |
+
+---
+
+### `Move`
+
+```rust
+TrayIconEvent::Move {
+    id: TrayIconId,
+    position: dpi::PhysicalPosition<f64>,
+    rect: Rect,
+}
+```
+
+The mouse cursor moved while inside the tray icon's bounding region.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `TrayIconId` | Identifies which tray icon triggered the event. |
+| `position` | `PhysicalPosition<f64>` | Updated physical cursor position. |
+| `rect` | `Rect` | Bounding rectangle of the tray icon on screen. |
+
+---
+
+### `Leave`
+
+```rust
+TrayIconEvent::Leave {
+    id: TrayIconId,
+    position: dpi::PhysicalPosition<f64>,
+    rect: Rect,
+}
+```
+
+The mouse cursor has left the tray icon's bounding region.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | `TrayIconId` | Identifies which tray icon triggered the event. |
+| `position` | `PhysicalPosition<f64>` | Physical cursor position at the moment of exit. |
+| `rect` | `Rect` | Bounding rectangle of the tray icon on screen. |
+
+---
+
+## Methods
+
+### `id`
+
+```rust
+pub fn id(&self) -> &TrayIconId
+```
+
+Returns the `TrayIconId` of the tray icon that triggered this event, regardless of which variant is matched.
+
+---
+
+### `receiver`
+
+```rust
+pub fn receiver<'a>() -> &'a TrayIconEventReceiver
+```
+
+Returns a reference to the global `TrayIconEventReceiver` (a `crossbeam_channel::Receiver<TrayIconEvent>`). Poll this channel in your event loop to receive tray icon events.
+
+<Note>
+  The channel receiver will not receive events when a custom handler has been registered with `set_event_handler(Some(...))`. Clear the handler with `set_event_handler(None)` to restore channel delivery.
+</Note>
+
+---
+
+### `set_event_handler`
+
+```rust
+pub fn set_event_handler<F: Fn(TrayIconEvent) + Send + Sync + 'static>(f: Option<F>)
+```
+
+Registers a closure to be called for every new `TrayIconEvent`. Pass `Some(closure)` to install a handler and `None` to remove it. This is the recommended approach for frameworks like [winit](https://docs.rs/winit) or [tao](https://docs.rs/tao) where tray events must wake an `EventLoop` via an `EventLoopProxy`.
+
+<Warning>
+  Calling `set_event_handler(Some(...))` **disables** delivery to the channel returned by `TrayIconEvent::receiver`. Events are forwarded exclusively to the custom handler until it is cleared with `set_event_handler(None)`.
+</Warning>
+
+<ParamField path="f" type="Option<F>">
+  `Some(closure)` installs the handler; `None` clears any existing handler and re-enables channel delivery.
+</ParamField>
+
+---
+
+## Usage examples
+
+### Polling the channel receiver
+
+Use this approach in a simple game loop or any non-reactive event model:
+
+```rust
+use tray_icon::TrayIconEvent;
+
+// Inside your main loop:
+if let Ok(event) = TrayIconEvent::receiver().try_recv() {
+    match event {
+        TrayIconEvent::Click { button, button_state, position, .. } => {
+            println!("Click — {button:?} {button_state:?} at {position:?}");
+        }
+        TrayIconEvent::DoubleClick { button, .. } => {
+            println!("Double-click — {button:?}");
+        }
+        TrayIconEvent::Enter { .. } => println!("Mouse entered tray area"),
+        TrayIconEvent::Move { .. } => {}
+        TrayIconEvent::Leave { .. } => println!("Mouse left tray area"),
+        _ => {}
+    }
+}
+```
+
+### Forwarding to a winit event loop
+
+Use `set_event_handler` to wake the event loop when a tray event arrives:
+
+```rust
+use tray_icon::TrayIconEvent;
+use winit::event_loop::EventLoop;
+
+#[derive(Debug)]
+enum UserEvent {
+    TrayIconEvent(TrayIconEvent),
+}
+
+let event_loop = EventLoop::<UserEvent>::with_user_event().build().unwrap();
+let proxy = event_loop.create_proxy();
+
+TrayIconEvent::set_event_handler(Some(move |event| {
+    // This closure runs on whichever thread dispatches tray events.
+    let _ = proxy.send_event(UserEvent::TrayIconEvent(event));
+}));
+```

@@ -1,0 +1,125 @@
+---
+title: "Error — tray-icon Error Types"
+sidebarTitle: "Error"
+description: "Reference for the Error enum and Result type alias in tray-icon, covering OS errors, PNG encoding errors, and thread constraint violations."
+---
+
+The `tray_icon::Error` enum collects every failure mode that can arise when creating or modifying a tray icon. It is derived with [`thiserror`](https://docs.rs/thiserror), which means each variant provides a human-readable `Display` implementation and the enum itself implements `std::error::Error`. The companion `Result<T>` type alias makes return signatures concise throughout the crate.
+
+## `Error` Enum
+
+```rust
+use tray_icon::Error;
+```
+
+The enum is marked `#[non_exhaustive]`, so match arms should always include a
+wildcard catch-all to remain forward-compatible with new variants added in
+future releases.
+
+### Variants
+
+<ParamField path="OsError" type="io::Error">
+  A transparent wrapper around `std::io::Error`. Returned whenever the
+  underlying operating system rejects a tray icon operation — for example,
+  when registering the notification icon on Windows fails or when writing a
+  temporary icon file on Linux fails.
+
+  The `#[error(transparent)]` attribute forwards the OS error's `Display` and
+  `source()` directly.
+</ParamField>
+
+<ParamField path="PngEncodingError" type="png::EncodingError">
+  Returned when the `png` crate fails to encode icon data into a PNG byte
+  stream. This variant is only compiled on **macOS** and **Linux** (including
+  BSD variants), because those platforms require the icon to be serialised as
+  PNG before being handed to the OS.
+
+  ```rust
+  // Conditionally compiled — only present on macOS and Linux.
+  #[cfg(any(target_os = "linux", target_os = "macos", /* BSDs */))]
+  PngEncodingError(png::EncodingError)
+  ```
+
+  <Note>
+    This variant is absent on Windows. Code that must compile on all three
+    platforms should handle it via the `#[non_exhaustive]` wildcard arm.
+  </Note>
+</ParamField>
+
+<ParamField path="NotMainThread" type="unit">
+  Returned when a `TrayIcon` is constructed outside the main thread on
+  **macOS**. AppKit requires all UI operations to run on the main thread; if
+  this constraint is violated, `build()` returns `Err(Error::NotMainThread)`
+  rather than panicking.
+
+  ```
+  Display: "not on the main thread"
+  ```
+</ParamField>
+
+## `Result<T>` Type Alias
+
+```rust
+pub type Result<T> = std::result::Result<T, Error>;
+```
+
+`tray_icon::Result<T>` is exported at the crate root and used as the return
+type of all fallible public functions, including `TrayIconBuilder::build()`,
+`TrayIcon::new()`, `TrayIcon::set_icon()`, and `TrayIcon::set_tooltip()`.
+
+## Handling Errors from `TrayIconBuilder::build`
+
+The most common place to encounter `Error` is when calling `build()` at
+application startup. The example below shows idiomatic handling with a
+`match` and a wildcard arm to stay `#[non_exhaustive]`-safe.
+
+```rust
+use tray_icon::{TrayIconBuilder, Icon, Error};
+
+fn create_tray(icon: Icon) {
+    match TrayIconBuilder::new()
+        .with_icon(icon)
+        .with_tooltip("My App")
+        .build()
+    {
+        Ok(tray) => {
+            // `tray` must be kept alive; dropping it removes the icon.
+            std::mem::forget(tray);
+        }
+        Err(Error::OsError(e)) => {
+            eprintln!("OS refused to create tray icon: {e}");
+        }
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        Err(Error::PngEncodingError(e)) => {
+            eprintln!("Failed to encode icon as PNG: {e}");
+        }
+        Err(Error::NotMainThread) => {
+            eprintln!("Tray icon must be created on the main thread (macOS).");
+        }
+        Err(e) => {
+            eprintln!("Unexpected tray-icon error: {e}");
+        }
+    }
+}
+```
+
+<Warning>
+  On macOS the event loop must already be **running** before you call
+  `build()`. Creating a `TrayIcon` before the loop starts can cause problems
+  with full-screen applications even if it doesn't immediately return an
+  error. Use `StartCause::Init` (winit) or `Event::NewEvents` (tao) as the
+  earliest safe point.
+</Warning>
+
+<Tip>
+  If you just want to propagate errors upward, the `?` operator works
+  naturally because `tray_icon::Result` is a standard `Result`:
+
+  ```rust
+  fn setup() -> tray_icon::Result<()> {
+      let icon = Icon::from_rgba(vec![0u8; 4], 1, 1)?;
+      let _tray = TrayIconBuilder::new().with_icon(icon).build()?;
+      Ok(())
+  }
+  ```
+</Tip>

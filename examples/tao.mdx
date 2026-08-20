@@ -1,0 +1,192 @@
+---
+title: "tray-icon with tao: Full Integration Example"
+sidebarTitle: "tao"
+description: "Complete example of integrating tray-icon with tao (Tauri's windowing library), handling both tray and menu events in the event loop."
+---
+
+`tao` is Tauri's maintained fork of winit, adding extra OS-level integrations needed for the Tauri desktop framework. The `tray-icon` integration with tao follows the same fundamental pattern as winit — using a `UserEvent` enum and `EventLoopProxy` to forward events — but uses tao's older closure-based `event_loop.run(...)` API instead of the `ApplicationHandler` trait. This makes the tao example slightly more concise for smaller applications.
+
+## Integration approach
+
+The tao event loop uses `EventLoopBuilder::<UserEvent>::with_user_event()` to create a loop that can receive custom events. Tray icon and menu events are each forwarded into this loop by registering callbacks with `TrayIconEvent::set_event_handler` and `MenuEvent::set_event_handler`. The tray icon itself is created inside the event loop closure when `Event::NewEvents(StartCause::Init)` fires — ensuring the AppKit status bar (on macOS) is fully ready.
+
+<CardGroup cols={2}>
+  <Card title="StartCause::Init" icon="flag">
+    Create the `TrayIcon` when `Event::NewEvents(StartCause::Init)` fires.
+    This is the earliest safe moment for the underlying platform APIs.
+  </Card>
+  <Card title="EventLoopProxy forwarding" icon="arrow-right-arrow-left">
+    Two proxies (one per event type) bridge the `tray-icon` callback system
+    into tao's typed user event queue.
+  </Card>
+  <Card title="Quit on menu item click" icon="power-off">
+    Compare `event.id == quit_i.id()` inside the `MenuEvent` branch to detect
+    the Quit item and set `ControlFlow::Exit`.
+  </Card>
+  <Card title="TrayIcon lifetime" icon="clock">
+    Hold the `TrayIcon` in an `Option` so you can call `.take()` before
+    setting `ControlFlow::Exit` to cleanly remove the icon.
+  </Card>
+</CardGroup>
+
+## Dev dependencies
+
+Add the following to your `Cargo.toml` to run this example:
+
+```toml
+[dev-dependencies]
+tao = "0.36"
+image = { version = "0.25", features = ["png"] }
+```
+
+## Full example
+
+The example below is taken directly from the `tray-icon` repository
+(`examples/tao.rs`).
+
+```rust
+// Copyright 2022-2022 Tauri Programme within The Commons Conservancy
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: MIT
+
+#![allow(unused)]
+
+use tao::{
+    event::Event,
+    event_loop::{ControlFlow, EventLoopBuilder},
+};
+use tray_icon::{
+    menu::{AboutMetadata, Menu, MenuEvent, MenuItem, PredefinedMenuItem},
+    TrayIconBuilder, TrayIconEvent,
+};
+
+// UserEvent carries both tray and menu events into the tao event loop.
+enum UserEvent {
+    TrayIconEvent(tray_icon::TrayIconEvent),
+    MenuEvent(tray_icon::menu::MenuEvent),
+}
+
+fn main() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/icon.png");
+
+    let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+
+    // Forward tray icon events into the event loop so it wakes up immediately.
+    let proxy = event_loop.create_proxy();
+    TrayIconEvent::set_event_handler(Some(move |event| {
+        proxy.send_event(UserEvent::TrayIconEvent(event));
+    }));
+
+    // Forward menu events the same way.
+    let proxy = event_loop.create_proxy();
+    MenuEvent::set_event_handler(Some(move |event| {
+        proxy.send_event(UserEvent::MenuEvent(event));
+    }));
+
+    let tray_menu = Menu::new();
+
+    // Build the context menu: About item, a separator, and a Quit item.
+    let quit_i = MenuItem::new("Quit", true, None);
+    tray_menu.append_items(&[
+        &PredefinedMenuItem::about(
+            None,
+            Some(AboutMetadata {
+                name: Some("tao".to_string()),
+                copyright: Some("Copyright tao".to_string()),
+                ..Default::default()
+            }),
+        ),
+        &PredefinedMenuItem::separator(),
+        &quit_i,
+    ]);
+
+    // The TrayIcon is created lazily inside the event loop.
+    let mut tray_icon = None;
+
+    let menu_channel = MenuEvent::receiver();
+    let tray_channel = TrayIconEvent::receiver();
+
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Wait;
+
+        match event {
+            // StartCause::Init fires once when the event loop is ready.
+            // This is the earliest safe point to create the tray icon.
+            Event::NewEvents(tao::event::StartCause::Init) => {
+                let icon = load_icon(std::path::Path::new(path));
+
+                // We create the icon once the event loop is actually running
+                // to prevent issues like https://github.com/tauri-apps/tray-icon/issues/90
+                tray_icon = Some(
+                    TrayIconBuilder::new()
+                        .with_menu(Box::new(tray_menu.clone()))
+                        .with_tooltip("tao - awesome windowing lib")
+                        .with_icon(icon)
+                        .build()
+                        .unwrap(),
+                );
+
+                // We have to request a redraw here to have the icon actually show up.
+                // Tao only exposes a redraw method on the Window so we use core-foundation directly.
+                #[cfg(target_os = "macos")]
+                unsafe {
+                    use objc2_core_foundation::CFRunLoop;
+
+                    let rl = CFRunLoop::main().unwrap();
+                    CFRunLoop::wake_up(&rl);
+                }
+            }
+
+            Event::UserEvent(UserEvent::TrayIconEvent(event)) => {
+                println!("{event:?}");
+            }
+
+            Event::UserEvent(UserEvent::MenuEvent(event)) => {
+                println!("{event:?}");
+
+                // Drop the tray icon before exiting so it is removed from the tray.
+                if event.id == quit_i.id() {
+                    tray_icon.take();
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
+
+            _ => {}
+        }
+    })
+}
+
+fn load_icon(path: &std::path::Path) -> tray_icon::Icon {
+    let (icon_rgba, icon_width, icon_height) = {
+        let image = image::open(path)
+            .expect("Failed to open icon path")
+            .into_rgba8();
+        let (width, height) = image.dimensions();
+        let rgba = image.into_raw();
+        (rgba, width, height)
+    };
+    tray_icon::Icon::from_rgba(icon_rgba, icon_width, icon_height).expect("Failed to open icon")
+}
+```
+
+## Running the example
+
+From the repository root:
+
+```sh
+cargo run --example tao
+```
+
+<Tip>
+  Unlike the winit example, the tao example does not need a separate GTK thread
+  for Linux because tao ships with native GTK support built in. If you are
+  porting code from winit to tao, you can remove the `std::thread::spawn` GTK
+  block entirely.
+</Tip>
+
+<Note>
+  Calling `tray_icon.take()` before `ControlFlow::Exit` is important — it drops
+  the `TrayIcon` and cleanly unregisters the icon from the system tray. Skipping
+  this step on some platforms leaves a ghost icon that disappears only after the
+  shell refreshes.
+</Note>

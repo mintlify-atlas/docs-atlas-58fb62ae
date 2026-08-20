@@ -1,0 +1,359 @@
+---
+title: "TrayIcon — Runtime Tray Icon Management"
+sidebarTitle: "TrayIcon"
+description: "API reference for TrayIcon, the runtime handle for a system tray icon — update icon, tooltip, visibility, and listen for native handles."
+---
+
+`TrayIcon` is the runtime handle to a system tray icon that has already been registered with the OS. It is **reference-counted** via `Rc` — cloning the handle is cheap and shares ownership. The underlying icon is automatically removed from the system tray when the **last** clone is dropped. You will typically obtain a `TrayIcon` from [`TrayIconBuilder::build()`](/api/tray-icon-builder) or from one of the constructors below.
+
+---
+
+## Constructors
+
+### `new`
+
+```rust
+pub fn new(attrs: TrayIconAttributes) -> Result<Self>
+```
+
+<ParamField path="attrs" type="TrayIconAttributes" required>
+  Configuration struct describing the initial state of the tray icon. A unique
+  ID is generated automatically.
+</ParamField>
+
+Builds and registers a new tray icon with the system tray using a freshly generated unique ID.
+
+<Warning>
+  **Linux:** The icon may not appear unless a menu is also set in `attrs`.
+  Assigning an empty `Menu` is sufficient.
+</Warning>
+
+---
+
+### `with_id`
+
+```rust
+pub fn with_id<I: Into<TrayIconId>>(id: I, attrs: TrayIconAttributes) -> Result<Self>
+```
+
+<ParamField path="id" type="I: Into<TrayIconId>" required>
+  An explicit identifier for this icon. A `&str` or `String` can be used
+  directly via the `Into` blanket implementation.
+</ParamField>
+<ParamField path="attrs" type="TrayIconAttributes" required>
+  Initial configuration for the tray icon.
+</ParamField>
+
+Same as `new` but lets you assign a deterministic ID that can be matched against [`TrayIconEvent`] payloads at runtime.
+
+---
+
+## Runtime Methods
+
+### `id`
+
+```rust
+pub fn id(&self) -> &TrayIconId
+```
+
+Returns a reference to the unique ID associated with this tray icon. The ID is stable for the lifetime of the icon and never changes.
+
+---
+
+### `set_icon`
+
+```rust
+pub fn set_icon(&self, icon: Option<Icon>) -> Result<()>
+```
+
+<ParamField path="icon" type="Option<Icon>" required>
+  The new icon to display. Pass `None` to remove the icon from the tray.
+</ParamField>
+
+Replaces the current tray icon image at runtime.
+
+<Note>
+  Passing `None` removes the icon from the system tray entirely. On Linux,
+  the icon may not be visible without a menu regardless of this call.
+</Note>
+
+---
+
+### `set_menu`
+
+```rust
+pub fn set_menu(&self, menu: Option<Box<dyn ContextMenu>>)
+```
+
+<ParamField path="menu" type="Option<Box<dyn ContextMenu>>" required>
+  The new context menu. Pass `None` to remove the menu (no-op on Linux).
+</ParamField>
+
+Replaces the context menu attached to the tray icon.
+
+<Warning>
+  **Linux:** Once a menu has been set it **cannot be removed**. Passing `None`
+  has no effect on Linux. You can still mutate the existing menu's items in
+  place.
+</Warning>
+
+---
+
+### `set_tooltip`
+
+```rust
+pub fn set_tooltip<S: AsRef<str>>(&self, tooltip: Option<S>) -> Result<()>
+```
+
+<ParamField path="tooltip" type="Option<S: AsRef<str>>" required>
+  New tooltip string. Pass `None` to clear the tooltip.
+</ParamField>
+
+Updates the tooltip text shown when the user hovers over the tray icon.
+
+<Note>
+  **Linux:** Unsupported — the call succeeds but has no visible effect.
+</Note>
+
+---
+
+### `set_title`
+
+```rust
+pub fn set_title<S: AsRef<str>>(&self, title: Option<S>)
+```
+
+<ParamField path="title" type="Option<S: AsRef<str>>" required>
+  New title string. Pass `None` to clear the title.
+</ParamField>
+
+Updates the text label rendered alongside the icon in the tray area.
+
+<Note>
+  **Linux:** The title is only shown when an icon is also present. It may not
+  render in all panel visualizations and should be updated sparingly.
+</Note>
+
+<Warning>
+  **Windows:** Unsupported — this call has no visible effect.
+</Warning>
+
+---
+
+### `set_visible`
+
+```rust
+pub fn set_visible(&self, visible: bool) -> Result<()>
+```
+
+<ParamField path="visible" type="bool" required>
+  `true` to show the icon, `false` to hide it.
+</ParamField>
+
+Shows or hides the tray icon without destroying the underlying handle. Useful for temporarily suppressing the icon while the application is in a particular state.
+
+---
+
+### `set_temp_dir_path`
+
+```rust
+pub fn set_temp_dir_path<P: AsRef<Path>>(&self, path: Option<P>)
+```
+
+<ParamField path="path" type="Option<P: AsRef<Path>>" required>
+  New directory path for the icon temp file, or `None` to revert to the
+  default location.
+</ParamField>
+
+Changes the directory where the temporary icon file is stored. **Linux only.** On non-Linux platforms this call is a no-op.
+
+---
+
+### `set_icon_as_template`
+
+```rust
+pub fn set_icon_as_template(&self, is_template: bool)
+```
+
+<ParamField path="is_template" type="bool" required>
+  `true` to mark the icon as a macOS template image.
+</ParamField>
+
+Toggles template-image rendering for the current icon. **macOS only.** Template images are recolored automatically by the system to match the menu bar appearance. This call is a no-op on Windows and Linux.
+
+---
+
+### `set_icon_with_as_template`
+
+```rust
+pub fn set_icon_with_as_template(&self, icon: Option<Icon>, is_template: bool) -> Result<()>
+```
+
+<ParamField path="icon" type="Option<Icon>" required>
+  The new icon, or `None` to remove it.
+</ParamField>
+<ParamField path="is_template" type="bool" required>
+  Whether the new icon should be treated as a macOS template image.
+</ParamField>
+
+Atomically updates both the icon image and its template flag in a single call. **macOS only.** On other platforms this is a no-op that returns `Ok(())`.
+
+---
+
+### `set_show_menu_on_left_click`
+
+```rust
+pub fn set_show_menu_on_left_click(&self, enable: bool)
+```
+
+<ParamField path="enable" type="bool" required>
+  `true` to show the menu on left click, `false` to suppress it.
+</ParamField>
+
+Enables or disables opening the context menu when the user left-clicks the tray icon.
+
+<Note>
+  **Linux:** Unsupported — this call has no effect.
+</Note>
+
+---
+
+### `set_show_menu_on_right_click`
+
+```rust
+pub fn set_show_menu_on_right_click(&self, enable: bool)
+```
+
+<ParamField path="enable" type="bool" required>
+  `true` to show the menu on right click, `false` to suppress it.
+</ParamField>
+
+Enables or disables opening the context menu when the user right-clicks the tray icon.
+
+<Note>
+  **Linux:** Unsupported — this call has no effect.
+</Note>
+
+---
+
+### `show_menu`
+
+```rust
+pub fn show_menu(&self)
+```
+
+Programmatically opens the context menu at the current cursor position. This is particularly useful when you need to update menu items dynamically just before the menu is displayed — update the items, then call `show_menu()`.
+
+<Note>
+  **Linux:** Unsupported.
+</Note>
+
+---
+
+### `rect`
+
+```rust
+pub fn rect(&self) -> Option<Rect>
+```
+
+Returns the bounding rectangle (position and size) of the tray icon as reported by the OS. Returns `None` if the information is unavailable.
+
+<Note>
+  **Linux:** Unsupported — always returns `None`.
+</Note>
+
+---
+
+## Platform-Specific Handle Methods
+
+These methods expose the underlying native handle for advanced integration scenarios.
+
+### `window_handle` — Windows only
+
+```rust
+#[cfg(windows)]
+pub fn window_handle(&self) -> windows_sys::Win32::Foundation::HWND
+```
+
+Returns the Win32 `HWND` of the hidden window backing the tray icon. The handle remains valid for the entire lifetime of the `TrayIcon`.
+
+---
+
+### `ns_status_item` — macOS only
+
+```rust
+#[cfg(target_os = "macos")]
+pub fn ns_status_item(&self) -> Option<objc2::rc::Retained<objc2_app_kit::NSStatusItem>>
+```
+
+Returns a reference-counted handle to the `NSStatusItem` that represents this icon in the macOS menu bar. Returns `None` if the status item is not currently available.
+
+---
+
+### `app_indicator` — Linux only
+
+```rust
+#[cfg(all(unix, not(target_os = "macos")))]
+pub unsafe fn app_indicator(&self) -> *const libappindicator::AppIndicator
+```
+
+Returns a raw pointer to the `libappindicator` `AppIndicator` backing this tray icon. The pointer is valid for as long as the `TrayIcon` handle is alive.
+
+<Warning>
+  This function is `unsafe`. The caller must ensure the pointer is not used
+  after the owning `TrayIcon` is dropped.
+</Warning>
+
+---
+
+## Code Example
+
+```rust
+use tray_icon::{TrayIcon, TrayIconAttributes, Icon, menu::Menu};
+
+// Build initial attributes
+let icon = Icon::from_rgba(vec![255u8; 32 * 32 * 4], 32, 32)?;
+let attrs = TrayIconAttributes {
+    icon: Some(icon),
+    tooltip: Some("My Application".to_string()),
+    menu_on_left_click: false,
+    ..Default::default()
+};
+
+// Create the tray icon
+let tray = TrayIcon::new(attrs)?;
+
+println!("Icon ID: {:?}", tray.id());
+
+// Update at runtime
+let new_icon = Icon::from_rgba(vec![0u8; 32 * 32 * 4], 32, 32)?;
+tray.set_icon(Some(new_icon))?;
+tray.set_tooltip(Some("Updated tooltip"))?;
+tray.set_visible(true)?;
+
+// Attach a new menu
+let menu = Menu::new();
+tray.set_menu(Some(Box::new(menu)));
+
+// Temporarily hide the icon
+tray.set_visible(false)?;
+```
+
+---
+
+## Platform Notes Summary
+
+| Method                        | Windows         | macOS           | Linux                          |
+|-------------------------------|-----------------|-----------------|--------------------------------|
+| `set_icon`                    | ✅               | ✅               | ⚠️ Needs menu to be visible    |
+| `set_menu`                    | ✅               | ✅               | ⚠️ `None` has no effect        |
+| `set_tooltip`                 | ✅               | ✅               | ❌ Unsupported                 |
+| `set_title`                   | ❌ Unsupported   | ✅               | ⚠️ Needs icon                  |
+| `set_visible`                 | ✅               | ✅               | ✅                              |
+| `set_temp_dir_path`           | ❌ No-op         | ❌ No-op         | ✅ Linux only                  |
+| `set_icon_as_template`        | ❌ No-op         | ✅               | ❌ No-op                       |
+| `set_icon_with_as_template`   | ❌ No-op         | ✅               | ❌ No-op                       |
+| `set_show_menu_on_left_click` | ✅               | ✅               | ❌ Unsupported                 |
+| `set_show_menu_on_right_click`| ✅               | ✅               | ❌ Unsupported                 |
+| `show_menu`                   | ✅               | ✅               | ❌ Unsupported                 |
+| `rect`                        | ✅               | ✅               | ❌ Always `None`               |

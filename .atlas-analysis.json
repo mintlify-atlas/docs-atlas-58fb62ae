@@ -1,0 +1,156 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "tray-icon",
+  "projectDescription": "A Rust library for creating and managing system tray icons with context menus and event handling for desktop applications on Windows, macOS, and Linux.",
+  "theme": "luma",
+  "primaryColor": "#0F172A",
+  "lightColor": "#F8FAFC",
+  "darkColor": "#0F172A",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guide",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "guides/tray-icon",
+              "guides/icons",
+              "guides/menus",
+              "guides/event-handling"
+            ]
+          },
+          {
+            "group": "Platform Notes",
+            "pages": [
+              "guides/platform-notes",
+              "guides/linux-dependencies"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/winit",
+              "examples/tao",
+              "examples/egui"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Tray Icon",
+            "pages": [
+              "api/tray-icon-builder",
+              "api/tray-icon",
+              "api/tray-icon-attributes"
+            ]
+          },
+          {
+            "group": "Icons",
+            "pages": [
+              "api/icon",
+              "api/bad-icon"
+            ]
+          },
+          {
+            "group": "Events",
+            "pages": [
+              "api/tray-icon-event",
+              "api/mouse-button",
+              "api/rect"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/tray-icon-id",
+              "api/error",
+              "api/menu"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Cross-platform tray icon creation (Windows, macOS, Linux/FreeBSD)",
+    "Builder pattern API via TrayIconBuilder for ergonomic construction",
+    "Context menu integration via the muda crate (re-exported as tray_icon::menu)",
+    "Tray event handling via channel receiver or custom event handler callback",
+    "Mouse event types: Click, DoubleClick, Enter, Move, Leave",
+    "Show/hide tray icon at runtime with set_visible()",
+    "Template icon support on macOS",
+    "Configurable menu display on left/right click",
+    "Programmatic menu display with show_menu()",
+    "Icon loading from RGBA bytes, file path (Windows), or embedded resource (Windows)",
+    "Native handle access: HWND (Windows), NSStatusItem (macOS), AppIndicator (Linux)",
+    "Optional serde support for serialization/deserialization of events"
+  ],
+  "publicApiSurface": [
+    "TrayIconBuilder::new()",
+    "TrayIconBuilder::with_id()",
+    "TrayIconBuilder::with_icon()",
+    "TrayIconBuilder::with_menu()",
+    "TrayIconBuilder::with_tooltip()",
+    "TrayIconBuilder::with_title()",
+    "TrayIconBuilder::with_temp_dir_path()",
+    "TrayIconBuilder::with_icon_as_template()",
+    "TrayIconBuilder::with_menu_on_left_click()",
+    "TrayIconBuilder::with_menu_on_right_click()",
+    "TrayIconBuilder::build()",
+    "TrayIcon::new()",
+    "TrayIcon::with_id()",
+    "TrayIcon::id()",
+    "TrayIcon::set_icon()",
+    "TrayIcon::set_menu()",
+    "TrayIcon::set_tooltip()",
+    "TrayIcon::set_title()",
+    "TrayIcon::set_visible()",
+    "TrayIcon::set_temp_dir_path()",
+    "TrayIcon::set_icon_as_template()",
+    "TrayIcon::set_show_menu_on_left_click()",
+    "TrayIcon::set_show_menu_on_right_click()",
+    "TrayIcon::show_menu()",
+    "TrayIcon::rect()",
+    "TrayIcon::window_handle() [Windows]",
+    "TrayIcon::ns_status_item() [macOS]",
+    "TrayIcon::app_indicator() [Linux]",
+    "TrayIconEvent::receiver()",
+    "TrayIconEvent::set_event_handler()",
+    "TrayIconEvent::id()",
+    "TrayIconEvent::Click",
+    "TrayIconEvent::DoubleClick",
+    "TrayIconEvent::Enter",
+    "TrayIconEvent::Move",
+    "TrayIconEvent::Leave",
+    "Icon::from_rgba()",
+    "Icon::from_path() [Windows]",
+    "Icon::from_resource() [Windows]",
+    "Icon::from_resource_name() [Windows]",
+    "Icon::from_handle() [Windows]",
+    "TrayIconId::new()",
+    "TrayIconId::new_unique()",
+    "TrayIconAttributes (struct)",
+    "MouseButton (enum)",
+    "MouseButtonState (enum)",
+    "Rect (struct)",
+    "Error (enum)",
+    "BadIcon (enum)",
+    "menu::Menu",
+    "menu::MenuItem",
+    "menu::MenuEvent",
+    "menu::PredefinedMenuItem",
+    "menu::AboutMetadata"
+  ]
+}

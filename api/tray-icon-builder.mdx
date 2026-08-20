@@ -1,0 +1,260 @@
+---
+title: "TrayIconBuilder — Build System Tray Icons"
+sidebarTitle: "TrayIconBuilder"
+description: "API reference for TrayIconBuilder, the builder struct for creating system tray icons with icon, tooltip, menu, and click behavior options."
+---
+
+`TrayIconBuilder` is the ergonomic entry point for constructing a system tray icon. It follows the builder pattern — chain configuration methods together and then call `.build()` to produce a [`TrayIcon`](/api/tray-icon) handle. Every method consumes and returns `Self`, so calls can be chained fluently. A unique `TrayIconId` is automatically assigned unless you supply one with `with_id`.
+
+## Struct Definition
+
+```rust
+#[derive(Default)]
+pub struct TrayIconBuilder {
+    id: TrayIconId,
+    attrs: TrayIconAttributes,
+}
+```
+
+---
+
+## Constructor
+
+### `new`
+
+```rust
+pub fn new() -> Self
+```
+
+Creates a new `TrayIconBuilder` with a freshly generated unique ID and default [`TrayIconAttributes`](/api/tray-icon-attributes). This is the typical starting point for any tray icon.
+
+---
+
+## Builder Methods
+
+### `with_id`
+
+```rust
+pub fn with_id<I: Into<TrayIconId>>(self, id: I) -> Self
+```
+
+<ParamField path="id" type="I: Into<TrayIconId>" required>
+  A custom identifier for this tray icon. Use this when you need to correlate
+  [`TrayIconEvent`] payloads back to a specific icon.
+</ParamField>
+
+Assigns an explicit ID instead of the auto-generated one. The value is converted via `Into<TrayIconId>`, so a plain `&str` or `String` works.
+
+---
+
+### `with_icon`
+
+```rust
+pub fn with_icon(self, icon: Icon) -> Self
+```
+
+<ParamField path="icon" type="Icon" required>
+  The icon image to display in the system tray.
+</ParamField>
+
+Sets the image displayed in the system tray. The `Icon` type can be constructed from RGBA bytes or a PNG file.
+
+<Warning>
+  **Linux:** The icon may not be visible unless a context menu is also set. Attaching
+  an empty `Menu` is sufficient to make the icon appear.
+</Warning>
+
+---
+
+### `with_menu`
+
+```rust
+pub fn with_menu(self, menu: Box<dyn ContextMenu>) -> Self
+```
+
+<ParamField path="menu" type="Box<dyn ContextMenu>" required>
+  A boxed context menu that will appear when the user right-clicks (or
+  left-clicks, depending on platform defaults) the tray icon.
+</ParamField>
+
+Attaches a context menu to the tray icon.
+
+<Warning>
+  **Linux:** Once a menu is set it **cannot be removed or replaced**. You can
+  still mutate the menu's items in place after construction.
+</Warning>
+
+---
+
+### `with_tooltip`
+
+```rust
+pub fn with_tooltip<S: AsRef<str>>(self, s: S) -> Self
+```
+
+<ParamField path="s" type="S: AsRef<str>" required>
+  The tooltip string shown when the user hovers over the tray icon.
+</ParamField>
+
+Sets the hover tooltip for the tray icon.
+
+<Note>
+  **Linux:** Tooltips are not supported and this value has no effect.
+</Note>
+
+---
+
+### `with_title`
+
+```rust
+pub fn with_title<S: AsRef<str>>(self, title: S) -> Self
+```
+
+<ParamField path="title" type="S: AsRef<str>" required>
+  A short text label rendered next to the icon in the tray area.
+</ParamField>
+
+Sets a text title that appears alongside the icon. This is useful for displaying frequently-updated values such as counters or status strings.
+
+<Note>
+  **Linux:** The title is only shown when an icon is also present. It may not
+  be rendered by all panel visualizations and should be used sparingly.
+</Note>
+
+<Warning>
+  **Windows:** Titles are unsupported and this value has no effect.
+</Warning>
+
+---
+
+### `with_temp_dir_path`
+
+```rust
+pub fn with_temp_dir_path<P: AsRef<Path>>(self, s: P) -> Self
+```
+
+<ParamField path="s" type="P: AsRef<Path>" required>
+  Path to the directory where the icon file will be written on Linux.
+</ParamField>
+
+Overrides the directory used to store the temporary icon file. **Linux only.** By default the icon is written to `$XDG_RUNTIME_DIR/tray-icon` or `$TEMP/tray-icon`. Use this method when you need a specific writable location.
+
+<Note>
+  This setting is silently ignored on Windows and macOS.
+</Note>
+
+---
+
+### `with_icon_as_template`
+
+```rust
+pub fn with_icon_as_template(self, is_template: bool) -> Self
+```
+
+<ParamField path="is_template" type="bool" required>
+  Pass `true` to treat the icon as a macOS template image.
+</ParamField>
+
+Marks the icon as a [template image](https://developer.apple.com/documentation/appkit/nsimage/1520017-template). **macOS only.** Template images are automatically adapted by the system to the current appearance (light/dark mode, menu bar coloring).
+
+<Note>
+  This setting is silently ignored on Windows and Linux.
+</Note>
+
+---
+
+### `with_menu_on_left_click`
+
+```rust
+pub fn with_menu_on_left_click(self, enable: bool) -> Self
+```
+
+<ParamField path="enable" type="bool" required>
+  Set to `false` to prevent the context menu from opening on a left click.
+  Default is `true`.
+</ParamField>
+
+Controls whether the tray context menu is shown when the user left-clicks the icon.
+
+<Note>
+  **Linux:** Unsupported. Left-click behavior on Linux is managed by the
+  desktop environment.
+</Note>
+
+---
+
+### `with_menu_on_right_click`
+
+```rust
+pub fn with_menu_on_right_click(self, enable: bool) -> Self
+```
+
+<ParamField path="enable" type="bool" required>
+  Set to `false` to prevent the context menu from opening on a right click.
+  Default is `true`.
+</ParamField>
+
+Controls whether the tray context menu is shown when the user right-clicks the icon.
+
+<Note>
+  **Linux:** Unsupported. Right-click behavior on Linux is managed by the
+  desktop environment.
+</Note>
+
+---
+
+### `id`
+
+```rust
+pub fn id(&self) -> &TrayIconId
+```
+
+Returns a reference to the `TrayIconId` that will be assigned to the built icon. Useful when you need to register event listeners or store the ID before calling `.build()`.
+
+---
+
+### `build`
+
+```rust
+pub fn build(self) -> Result<TrayIcon>
+```
+
+Consumes the builder and registers the tray icon with the system tray. Returns a [`TrayIcon`](/api/tray-icon) handle on success or a [`Error`] on failure. After this call you can no longer access the builder.
+
+---
+
+## Full Example
+
+```rust
+use tray_icon::{TrayIconBuilder, Icon, menu::Menu};
+
+// Build an RGBA icon (replace with real pixel data)
+let icon = Icon::from_rgba(vec![255u8; 32 * 32 * 4], 32, 32)?;
+
+let tray_menu = Menu::new();
+
+let tray_icon = TrayIconBuilder::new()
+    .with_icon(icon)
+    .with_menu(Box::new(tray_menu))
+    .with_tooltip("My App")
+    .with_title("v1.0")
+    .with_menu_on_left_click(false)
+    .build()?;
+
+println!("Tray icon created with id: {:?}", tray_icon.id());
+```
+
+---
+
+## Platform Notes Summary
+
+| Method                    | Windows     | macOS       | Linux                              |
+|---------------------------|-------------|-------------|-------------------------------------|
+| `with_icon`               | ✅           | ✅           | ⚠️ Needs a menu to be visible       |
+| `with_menu`               | ✅           | ✅           | ⚠️ Cannot be removed once set       |
+| `with_tooltip`            | ✅           | ✅           | ❌ Unsupported                      |
+| `with_title`              | ❌ Unsupported | ✅         | ⚠️ Needs icon; may not render       |
+| `with_temp_dir_path`      | ❌ No-op     | ❌ No-op     | ✅ Linux only                       |
+| `with_icon_as_template`   | ❌ No-op     | ✅           | ❌ No-op                            |
+| `with_menu_on_left_click` | ✅           | ✅           | ❌ Unsupported                      |
+| `with_menu_on_right_click`| ✅           | ✅           | ❌ Unsupported                      |
